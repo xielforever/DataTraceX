@@ -35,6 +35,7 @@ class RunKind(StrEnum):
 class EdgeKind(StrEnum):
     CONTAINS = "contains"
     DEPENDS_ON = "depends_on"
+    USES_CODE = "uses_code"
     USES_CONNECTION = "uses_connection"
     EXECUTES_ON = "executes_on"
     READS = "reads"

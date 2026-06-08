@@ -109,6 +109,61 @@ python scripts/project_to_neo4j.py
 Current graph projection:
 
 ```text
-Entity nodes: 6020
-Relationships: 13031
+Entity nodes: 9348
+Relationships: 21606
 ```
+
+## Script Content Ingestion
+
+```powershell
+python scripts/probe_dataarts_scripts.py --sample-size 3
+python scripts/ingest_dataarts_scripts.py --workers 6 --missing-only
+```
+
+The script API shape was validated with DataArts V1:
+
+```text
+GET /v1/{project_id}/scripts
+GET /v1/{project_id}/scripts/{script_name}?version={scriptVersion}
+```
+
+The detail payload contains `content`, `name`, `type`, `version`, directory and
+connection metadata. The probe script reports keys and content length only; it
+does not print script content.
+
+Current script ingestion snapshot:
+
+```text
+script references: 1280
+distinct script name/version pairs: 778
+script_detail raw payloads: 778
+CodeArtifact entities: 777
+node uses_code edges: 1280
+script evidence records: 778
+```
+
+One fewer CodeArtifact than script payloads is expected because CodeArtifact URNs
+are based on content SHA256, and two script versions currently share identical
+content.
+
+## Script SQL Lineage
+
+```powershell
+python scripts/derive_dataarts_script_lineage.py
+```
+
+Current deterministic script parser snapshot:
+
+```text
+SQL script references: 955
+references with parsed edges: 929
+parsed statements: 4800
+failed statements: 598
+script SQL evidence records: 955
+script-derived entities upserted: 7292
+script-derived edges upserted: 7292
+```
+
+The parser stores evidence and confidence for every derived edge. Unsupported or
+partial Hive/DWS syntax is counted, not logged as script text, and does not
+cause invented lineage.

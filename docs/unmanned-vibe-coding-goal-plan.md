@@ -9,6 +9,26 @@ DataTraceX already has the first real DataArts definition graph in PostgreSQL
 and Neo4j. The next goal is to move from deterministic job/node structure to
 actionable lineage extraction.
 
+## Current Pass Status
+
+Validated on 2026-06-09:
+
+- DataArts script API probing is implemented in `scripts/probe_dataarts_scripts.py`.
+- DataArts script content ingestion is implemented in
+  `scripts/ingest_dataarts_scripts.py`.
+- 778 real script detail payloads were collected.
+- 777 CodeArtifact entities were created from content SHA256 hashes.
+- 1280 DataArts node to CodeArtifact `uses_code` relationships were persisted.
+- SQL script lineage derivation is implemented in
+  `scripts/derive_dataarts_script_lineage.py`.
+- 955 SQL script references produced parser evidence; 929 had deterministic
+  table-level edges.
+- Long/complex script AI candidate ingestion is implemented in
+  `scripts/analyze_dataarts_scripts_with_ai.py`.
+- The Web UI now renders directed upstream/downstream data flow and supports
+  accepting review candidates.
+- PostgreSQL and Neo4j currently contain 9348 entities and 21606 relationships.
+
 Open-source parsing is only reliable for clear SQL statements, explicit OBS
 paths, and simple static references. Many real Python, shell, Flink, and dynamic
 SQL scripts are too long or too contextual for SQLGlot, regex, or Python AST

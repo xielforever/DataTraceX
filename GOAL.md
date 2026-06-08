@@ -15,10 +15,14 @@ development pass, read:
 - PostgreSQL and Neo4j are connected and verified.
 - 512 DataArts jobs are ingested.
 - 4509 DataArts nodes are materialized.
-- PostgreSQL contains 6020 entities and 13031 lineage/design relationships.
+- 778 DataArts script payloads are ingested.
+- 777 `CodeArtifact` entities are materialized from script content hashes.
+- PostgreSQL contains 9348 entities and 21606 lineage/design relationships.
 - Neo4j contains the current graph projection.
 - AI-assisted candidate persistence, manual review materialization, and the
   lineage Web UI now have an end-to-end validation path.
+- The Web UI renders directed data flow with upstream/downstream layout and
+  manual review actions.
 
 ## Non-Negotiable Rules
 
@@ -42,5 +46,14 @@ deterministic collection:
 3. Add an AI lineage analysis module for long Python and complex scripts.
 4. Add a manual lineage review queue for uncertain or AI-suggested edges.
 5. Persist accepted edges into PostgreSQL and project them to Neo4j.
+
+Current implemented state:
+
+- Script ingestion, CodeArtifact materialization, SQL script lineage derivation,
+  AI candidate persistence, manual acceptance, and Neo4j projection are
+  implemented and validated.
+- Real AI execution requires `DATATRACEX_AI_API_KEY`,
+  `DATATRACEX_AI_BASE_URL`, and `DATATRACEX_AI_MODEL`; mock-provider validation
+  is complete.
 
 Detailed tasks are in `docs/unmanned-vibe-coding-goal-plan.md`.

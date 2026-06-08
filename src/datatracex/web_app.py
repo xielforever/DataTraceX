@@ -128,7 +128,7 @@ class WebHandler(BaseHTTPRequestHandler):
 
     def do_GET(self) -> None:
         parsed = urlparse(self.path)
-        if parsed.path == "/":
+        if parsed.path == "/" or parsed.path.startswith("/lineage/nodes/"):
             self._html(INDEX_HTML)
             return
         if parsed.path == "/api/stats":
@@ -226,32 +226,34 @@ INDEX_HTML = r"""<!doctype html>
   <title>DataTraceX</title>
   <style>
     :root {
-      --ink: #12100d;
-      --paper: #f4f1ea;
-      --panel: #fffaf0;
-      --line: #24201a;
-      --muted: #6d665b;
-      --amber: #c88222;
-      --teal: #167d7f;
-      --red: #b43d2a;
-      --green: #28784f;
-      --blue: #315f9c;
+      --ink: #111412;
+      --paper: #f5f8f6;
+      --panel: #ffffff;
+      --rail: #e2e8e4;
+      --line: #171b18;
+      --muted: #64706a;
+      --read: #008c95;
+      --write: #d54836;
+      --derive: #6a57a8;
+      --design: #8f7a26;
+      --code: #26835d;
+      --root: #ffd447;
     }
     * { box-sizing: border-box; }
     body {
       margin: 0;
       color: var(--ink);
       background:
-        linear-gradient(90deg, rgba(18,16,13,.05) 1px, transparent 1px) 0 0/24px 24px,
-        linear-gradient(rgba(18,16,13,.04) 1px, transparent 1px) 0 0/24px 24px,
+        linear-gradient(90deg, rgba(17,20,18,.05) 1px, transparent 1px) 0 0/28px 28px,
+        linear-gradient(rgba(17,20,18,.04) 1px, transparent 1px) 0 0/28px 28px,
         var(--paper);
-      font-family: "Aptos", "Segoe UI", sans-serif;
+      font-family: "Bahnschrift", "Segoe UI", sans-serif;
       letter-spacing: 0;
     }
     .shell {
       display: grid;
-      grid-template-columns: 320px minmax(0, 1fr) 360px;
-      grid-template-rows: 64px minmax(0, 1fr);
+      grid-template-columns: 340px minmax(0, 1fr) 380px;
+      grid-template-rows: 58px minmax(0, 1fr);
       height: 100vh;
     }
     header {
@@ -259,15 +261,15 @@ INDEX_HTML = r"""<!doctype html>
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 0 18px;
+      padding: 0 16px;
       border-bottom: 2px solid var(--line);
-      background: #f8d36a;
+      background: var(--root);
     }
     h1 {
       margin: 0;
-      font-size: 24px;
-      font-family: Georgia, "Times New Roman", serif;
-      font-weight: 700;
+      font-size: 22px;
+      font-family: "Cambria", Georgia, serif;
+      font-weight: 800;
     }
     .status {
       display: flex;
@@ -282,7 +284,7 @@ INDEX_HTML = r"""<!doctype html>
     }
     aside {
       border-right: 2px solid var(--line);
-      background: rgba(255,250,240,.92);
+      background: rgba(255,255,255,.92);
       display: grid;
       grid-template-rows: auto minmax(0, 1fr);
     }
@@ -317,13 +319,38 @@ INDEX_HTML = r"""<!doctype html>
       padding: 10px;
       margin-bottom: 8px;
       cursor: pointer;
+      transition: transform .12s ease, background .12s ease;
+    }
+    .item:hover {
+      transform: translateX(3px);
+      background: #eef8f3;
     }
     .item strong, .candidate strong { display: block; font-size: 13px; overflow-wrap: anywhere; }
     .meta { color: var(--muted); font-size: 12px; margin-top: 4px; overflow-wrap: anywhere; }
     main {
       display: grid;
-      grid-template-rows: minmax(0, 1fr) 176px;
-      background: rgba(255,255,255,.32);
+      grid-template-rows: 48px minmax(0, 1fr) 188px;
+      background: rgba(255,255,255,.38);
+    }
+    .flowbar {
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      align-items: center;
+      gap: 10px;
+      border-bottom: 2px solid var(--line);
+      background: rgba(255,255,255,.72);
+      padding: 0 14px;
+      font-size: 12px;
+      font-weight: 900;
+      text-transform: uppercase;
+    }
+    .flowbar span:nth-child(1) { text-align: left; color: var(--read); }
+    .flowbar span:nth-child(2) { text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .flowbar span:nth-child(3) { text-align: right; color: var(--write); }
+    .canvas {
+      position: relative;
+      min-height: 0;
+      overflow: hidden;
     }
     #graph {
       width: 100%;
@@ -332,12 +359,14 @@ INDEX_HTML = r"""<!doctype html>
     }
     .legend {
       position: absolute;
-      left: 338px;
-      top: 78px;
+      left: 12px;
+      top: 12px;
       display: flex;
+      flex-wrap: wrap;
       gap: 8px;
       font-size: 12px;
       font-weight: 800;
+      max-width: calc(100% - 24px);
     }
     .pill {
       border: 2px solid var(--line);
@@ -355,7 +384,7 @@ INDEX_HTML = r"""<!doctype html>
     }
     .right {
       border-left: 2px solid var(--line);
-      background: rgba(255,250,240,.94);
+      background: rgba(255,255,255,.94);
       display: grid;
       grid-template-rows: 44px minmax(0, 1fr);
     }
@@ -368,25 +397,47 @@ INDEX_HTML = r"""<!doctype html>
     }
     .candidate {
       border: 2px solid var(--line);
-      background: #fff6df;
+      background: #ffffff;
       padding: 10px;
       margin-bottom: 10px;
     }
     .actions { display: flex; gap: 8px; margin-top: 8px; }
     .accept { background: #bfe3c8; }
     .reject { background: #efb7a9; }
-    .node text { font-size: 11px; pointer-events: none; }
+    .candidate .lineage {
+      margin-top: 6px;
+      font-family: "Cascadia Mono", Consolas, monospace;
+      color: var(--ink);
+      font-size: 11px;
+      overflow-wrap: anywhere;
+    }
+    .node text { font-size: 11px; pointer-events: none; paint-order: stroke; stroke: rgba(255,255,255,.88); stroke-width: 4px; stroke-linejoin: round; }
     .node circle { stroke: var(--line); stroke-width: 2; }
-    .link { stroke: var(--line); stroke-width: 1.4; opacity: .62; }
-    .link.reads { stroke: var(--teal); }
-    .link.writes { stroke: var(--red); }
-    .link.contains { stroke: var(--amber); }
-    .link.depends_on { stroke: var(--blue); }
-    .link.uses_connection { stroke: var(--green); }
+    .link { fill: none; stroke: var(--line); stroke-width: 1.6; opacity: .64; }
+    .link.reads { stroke: var(--read); marker-end: url(#arrow-read); }
+    .link.writes { stroke: var(--write); marker-end: url(#arrow-write); }
+    .link.derives_from { stroke: var(--derive); marker-end: url(#arrow-derive); }
+    .link.uses_code { stroke: var(--code); stroke-dasharray: 6 5; }
+    .link.contains, .link.depends_on, .link.uses_connection, .link.executes_on { stroke: var(--design); stroke-dasharray: 4 5; opacity: .42; }
+    .link-label {
+      font-size: 10px;
+      font-weight: 900;
+      fill: var(--ink);
+      paint-order: stroke;
+      stroke: rgba(255,255,255,.82);
+      stroke-width: 3px;
+      stroke-linejoin: round;
+    }
     @media (max-width: 1100px) {
       .shell { grid-template-columns: 280px minmax(0, 1fr); }
       .right { display: none; }
       header { grid-column: 1 / 3; }
+    }
+    @media (max-width: 760px) {
+      .shell { grid-template-columns: 1fr; grid-template-rows: 58px 220px minmax(0, 1fr); }
+      header { grid-column: 1; }
+      aside { border-right: 0; border-bottom: 2px solid var(--line); }
+      main { min-height: 0; }
     }
   </style>
 </head>
@@ -407,7 +458,8 @@ INDEX_HTML = r"""<!doctype html>
       <div class="results" id="results"></div>
     </aside>
     <main>
-      <div style="position:relative; min-height:0;">
+      <div class="flowbar"><span>Upstream</span><span id="rootName">No root selected</span><span>Downstream</span></div>
+      <div class="canvas">
         <div class="legend">
           <span class="pill">READS</span><span class="pill">WRITES</span><span class="pill">DEPENDS</span><span class="pill">REVIEW</span>
         </div>
@@ -462,8 +514,9 @@ INDEX_HTML = r"""<!doctype html>
       $('candidates').innerHTML = rows.map(row => `
         <div class="candidate">
           <strong>${escapeHtml(row.proposed_kind)} ${Number(row.proposed_confidence).toFixed(2)}</strong>
-          <div class="meta">${escapeHtml(row.proposed_src_urn)} -> ${escapeHtml(row.proposed_dst_urn)}</div>
+          <div class="lineage">${escapeHtml(row.proposed_src_urn)} -> ${escapeHtml(row.proposed_dst_urn)}</div>
           <div class="meta">${escapeHtml(row.rationale)}</div>
+          <div class="meta" title="${escapeHtml(row.node_urn || '')}">${escapeHtml(shortLabel(row.node_urn || '', 72))} ${lineRange(row)}</div>
           <div class="actions">
             <button class="accept" data-id="${row.candidate_id}">Accept</button>
             <button class="reject" data-id="${row.candidate_id}">Reject</button>
@@ -485,49 +538,126 @@ INDEX_HTML = r"""<!doctype html>
       const width = svg.clientWidth || 900;
       const height = svg.clientHeight || 600;
       svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
-      const nodes = graph.nodes.map((n, i) => ({...n, x: width/2 + Math.cos(i)*80, y: height/2 + Math.sin(i)*80}));
+      $('rootName').textContent = shortLabel(graph.root || 'No root selected', 72);
+      const nodes = graph.nodes.map((n) => ({...n, x: width/2, y: height/2, layer: null}));
       const byUrn = Object.fromEntries(nodes.map(n => [n.urn, n]));
-      const links = graph.links.filter(l => byUrn[l.source] && byUrn[l.target]);
-      const radius = Math.min(width, height) * 0.38;
-      nodes.forEach((n, i) => {
-        const angle = (Math.PI * 2 * i) / Math.max(nodes.length, 1);
-        n.x = width / 2 + Math.cos(angle) * radius * (n.urn === graph.root ? 0 : 1);
-        n.y = height / 2 + Math.sin(angle) * radius * (n.urn === graph.root ? 0 : 1);
-      });
+      const links = graph.links
+        .filter(l => byUrn[l.source] && byUrn[l.target])
+        .map(l => ({...l, ...flowEndpoints(l)}));
+      layoutFlow(nodes, links, byUrn, graph.root, width, height);
+      const defs = `
+        <defs>
+          <marker id="arrow-read" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L0,6 L9,3 z" fill="var(--read)"></path></marker>
+          <marker id="arrow-write" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L0,6 L9,3 z" fill="var(--write)"></path></marker>
+          <marker id="arrow-derive" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L0,6 L9,3 z" fill="var(--derive)"></path></marker>
+        </defs>`;
       const linkMarkup = links.map(l => {
-        const s = byUrn[l.source], t = byUrn[l.target];
-        return `<line class="link ${String(l.type || '').toLowerCase()}" x1="${s.x}" y1="${s.y}" x2="${t.x}" y2="${t.y}"><title>${escapeHtml(l.type)} ${l.confidence ?? ''}</title></line>`;
+        const s = byUrn[l.flowSource], t = byUrn[l.flowTarget];
+        const midX = (s.x + t.x) / 2;
+        const midY = (s.y + t.y) / 2;
+        const dx = t.x - s.x;
+        const curve = Math.max(-80, Math.min(80, dx * 0.18));
+        const path = `M${s.x},${s.y} C${s.x + curve},${s.y} ${t.x - curve},${t.y} ${t.x},${t.y}`;
+        return `<g>
+          <path class="link ${String(l.type || '').toLowerCase()}" d="${path}"><title>${escapeHtml(l.type)} ${l.confidence ?? ''}</title></path>
+          ${isDataFlow(l) && links.length <= 140 ? `<text class="link-label" x="${midX}" y="${midY - 6}">${escapeHtml(String(l.type || '').toUpperCase())}</text>` : ''}
+        </g>`;
       }).join('');
       const nodeMarkup = nodes.map(n => {
         const fill = colorFor(n.kind);
-        const label = shortLabel(n.name || n.urn);
+        const label = shortLabel(n.name || n.urn, 34);
+        const showLabel = nodes.length <= 120 || n.urn === graph.root;
         return `<g class="node" transform="translate(${n.x},${n.y})" data-urn="${encodeURIComponent(n.urn)}">
-          <circle r="${n.urn === graph.root ? 13 : 9}" fill="${fill}"></circle>
-          <text x="13" y="4">${escapeHtml(label)}</text>
+          <title>${escapeHtml(n.urn)}</title>
+          <circle r="${n.urn === graph.root ? 14 : (nodes.length > 240 ? 6 : 9)}" fill="${n.urn === graph.root ? 'var(--root)' : fill}"></circle>
+          ${showLabel ? `<text x="13" y="4">${escapeHtml(label)}</text>` : ''}
         </g>`;
       }).join('');
-      svg.innerHTML = linkMarkup + nodeMarkup;
+      svg.innerHTML = defs + linkMarkup + nodeMarkup;
       [...svg.querySelectorAll('.node')].forEach(el => {
         el.onclick = () => {
           const urn = decodeURIComponent(el.dataset.urn);
           const node = byUrn[urn];
-          const connected = links.filter(l => l.source === urn || l.target === urn);
+          const connected = links.filter(l => l.source === urn || l.target === urn || l.flowSource === urn || l.flowTarget === urn);
           $('detail').textContent = JSON.stringify({node, connected}, null, 2);
         };
         el.ondblclick = () => loadLineage(decodeURIComponent(el.dataset.urn));
       });
     }
 
-    function colorFor(kind) {
-      return {job:'#f8d36a', node:'#9ed0d1', dataset:'#c8d79a', path_prefix:'#f0a58e', connection:'#b9aedc', workspace:'#f4f1ea'}[kind] || '#ddd1bd';
+    function flowEndpoints(link) {
+      const type = String(link.type || '').toLowerCase();
+      if (type === 'reads') return {flowSource: link.target, flowTarget: link.source};
+      return {flowSource: link.source, flowTarget: link.target};
     }
-    function shortLabel(value) { return String(value).length > 34 ? String(value).slice(0, 31) + '...' : String(value); }
+    function isDataFlow(link) {
+      return ['reads', 'writes', 'derives_from'].includes(String(link.type || '').toLowerCase());
+    }
+    function layoutFlow(nodes, links, byUrn, root, width, height) {
+      if (!nodes.length) return;
+      const rootNode = byUrn[root] || nodes[0];
+      rootNode.layer = 0;
+      for (let pass = 0; pass < nodes.length + 2; pass++) {
+        let changed = false;
+        for (const link of links.filter(isDataFlow)) {
+          const s = byUrn[link.flowSource], t = byUrn[link.flowTarget];
+          if (!s || !t) continue;
+          if (s.layer !== null && t.layer === null) { t.layer = s.layer + 1; changed = true; }
+          if (t.layer !== null && s.layer === null) { s.layer = t.layer - 1; changed = true; }
+        }
+        if (!changed) break;
+      }
+      const context = nodes.filter(n => n.layer === null);
+      context.forEach((node, i) => { node.layer = i % 2 === 0 ? -1 : 1; node.context = true; });
+      const minLayer = Math.min(...nodes.map(n => n.layer));
+      const maxLayer = Math.max(...nodes.map(n => n.layer));
+      const span = Math.max(1, maxLayer - minLayer);
+      const grouped = new Map();
+      for (const node of nodes) {
+        if (!grouped.has(node.layer)) grouped.set(node.layer, []);
+        grouped.get(node.layer).push(node);
+      }
+      for (const [layer, group] of grouped.entries()) {
+        group.sort((a, b) => String(a.kind).localeCompare(String(b.kind)) || String(a.name || a.urn).localeCompare(String(b.name || b.urn)));
+        const x = 80 + ((layer - minLayer) / span) * Math.max(1, width - 170);
+        const available = Math.max(120, height - 130);
+        const top = 78;
+        const maxPerColumn = Math.max(8, Math.floor(available / (nodes.length > 240 ? 13 : 22)));
+        const columns = Math.max(1, Math.ceil(group.length / maxPerColumn));
+        const columnGap = nodes.length > 240 ? 14 : 26;
+        const visibleRows = Math.ceil(group.length / columns);
+        const step = available / Math.max(visibleRows, 1);
+        group.forEach((node, i) => {
+          const column = Math.floor(i / maxPerColumn);
+          const row = i % maxPerColumn;
+          node.x = x + (column - (columns - 1) / 2) * columnGap;
+          node.y = top + step * (row + 0.5);
+          if (node.urn === root) {
+            node.x = width / 2;
+            node.y = height / 2;
+          }
+        });
+      }
+    }
+    function colorFor(kind) {
+      return {job:'#ffd447', node:'#98d7d9', dataset:'#c8e36e', path_prefix:'#ffac8b', connection:'#c6b7f2', code_artifact:'#80d6aa', workspace:'#ffffff'}[kind] || '#dfe4e0';
+    }
+    function shortLabel(value, limit = 34) { return String(value).length > limit ? String(value).slice(0, limit - 3) + '...' : String(value); }
+    function lineRange(row) { return row.line_start ? `line ${row.line_start}${row.line_end ? '-' + row.line_end : ''}` : ''; }
     function escapeHtml(value) {
       return String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
     }
     $('searchBtn').onclick = search;
     $('q').onkeydown = (e) => { if (e.key === 'Enter') search(); };
-    loadStats(); loadCandidates();
+    function loadInitialFromPath() {
+      const prefix = '/lineage/nodes/';
+      if (location.pathname.startsWith(prefix)) {
+        const urn = decodeURIComponent(location.pathname.slice(prefix.length));
+        $('q').value = urn;
+        loadLineage(urn);
+      }
+    }
+    loadStats(); loadCandidates(); loadInitialFromPath();
   </script>
 </body>
 </html>"""

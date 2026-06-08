@@ -20,6 +20,21 @@ class DataArtsClient:
     def show_job(self, job_name: str) -> Any:
         return self.client.get(f"/v1/{self.project_id}/jobs/{quote(job_name, safe='')}")
 
+    def list_scripts(self, limit: int = 100, offset: int = 0) -> Any:
+        return self.client.get(
+            f"/v1/{self.project_id}/scripts",
+            query={"limit": limit, "offset": offset},
+        )
+
+    def show_script(self, script_name: str, version: str | int | None = None) -> Any:
+        return self.client.get(
+            self.script_detail_path(script_name),
+            query={"version": version},
+        )
+
+    def script_detail_path(self, script_name: str) -> str:
+        return f"/v1/{self.project_id}/scripts/{quote(script_name, safe='')}"
+
     def list_job_instances(
         self,
         job_name: str,

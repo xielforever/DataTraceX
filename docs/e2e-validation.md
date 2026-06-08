@@ -8,7 +8,19 @@ Validated on 2026-06-09.
 PostgreSQL: ok
 Neo4j: ok
 schema versions: 001_schema, 002_lineage_core_upgrade, 003_ai_review
-tests: 14 passed
+tests: 20 passed
+```
+
+Current fact-store snapshot:
+
+```text
+entities: 9348
+edges: 21606
+evidence: 3712
+raw_payload: 1297
+script_detail payloads: 778
+CodeArtifact entities: 777
+uses_code edges: 1280
 ```
 
 ## DataArts Graph
@@ -47,6 +59,20 @@ links: 1
 relationship: DERIVES_FROM 0.73
 ```
 
+Additional validation created an AI candidate from a real DataArts Python script
+payload using the mock provider. The reviewer accepted it from the Web UI:
+
+```text
+pending before: 1
+pending after: 0
+manual_review accepted candidates: 3
+Neo4j projection after acceptance: 9348 entities, 21606 relationships
+```
+
+Real AI execution is wired through the OpenAI-compatible provider. It is not run
+until `DATATRACEX_AI_API_KEY`, `DATATRACEX_AI_BASE_URL`, and
+`DATATRACEX_AI_MODEL` are provided.
+
 ## Frontend
 
 Validated surfaces:
@@ -54,10 +80,24 @@ Validated surfaces:
 - Stats header
 - Search by job/table/URN text
 - Full graph rendering in SVG
+- Directed upstream/downstream data-flow layout
+- Arrow rendering for `READS`, `WRITES`, and `DERIVES_FROM`
+- Dense graph rendering without label overlap
 - Node detail panel
 - Review Queue list
 - Accept action from UI
 - Neo4j-backed graph refresh after projection
+
+Latest browser validation loaded:
+
+```text
+root: dws://dws_dev/th_ai/sdi_th/sdi_th_etl_program_log
+nodes: 418
+links: 600
+data-flow arrow links: 146
+visible node labels in dense mode: 1
+pending candidates after accept: 0
+```
 
 The page is served by:
 
