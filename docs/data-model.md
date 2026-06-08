@@ -68,10 +68,13 @@ Prepared:
 - remote PostgreSQL/Neo4j connectivity
 - DataArts job/node definition ingestion
 - DataArts first-pass design lineage derivation
+- DataArts script content ingestion and CodeArtifact materialization
+- deterministic SQL script lineage derivation
+- AI-assisted candidate persistence
+- manual review inspect/edit/accept/reject workflow
 - PostgreSQL to Neo4j graph projection
 
 Next:
 
-- DataArts script API ingestion for `SCRIPT` mode SQL nodes
 - DataArts instance run materialization
 - CDM job/link/submission ingestion when CDM cluster discovery is implemented

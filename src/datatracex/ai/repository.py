@@ -3,12 +3,28 @@ from __future__ import annotations
 import hashlib
 import json
 from dataclasses import dataclass
+from datetime import datetime
+from decimal import Decimal
 from typing import Any
 
 import psycopg
 from psycopg.rows import dict_row
 
 from .lineage_analyzer import LineageCandidate
+
+
+EDITABLE_FIELDS = {
+    "proposed_src_urn",
+    "proposed_dst_urn",
+    "proposed_kind",
+    "proposed_edge_scope",
+    "proposed_confidence",
+    "rationale",
+    "line_start",
+    "line_end",
+}
+ALLOWED_REVIEW_KINDS = {"reads", "writes", "derives_from", "uses_connection", "executes_on", "depends_on", "contains"}
+ALLOWED_REVIEW_SCOPES = {"design", "run", "inferred"}
 
 
 @dataclass(frozen=True, slots=True)
@@ -127,6 +143,71 @@ class LineageCandidateRepository:
                 (event_id, candidate_id, _action(status), reviewer, comment, before, status),
             )
 
+    def edit_candidate(
+        self,
+        candidate_id: str,
+        updates: dict[str, Any],
+        reviewer: str,
+        comment: str | None = None,
+    ) -> dict[str, Any]:
+        sanitized = validate_candidate_updates(updates)
+        if not sanitized:
+            raise ValueError("no editable fields provided")
+        event_id = _stable_id(
+            "review",
+            candidate_id,
+            "edit",
+            reviewer,
+            json.dumps(sanitized, ensure_ascii=False, sort_keys=True),
+            comment or "",
+        )
+        with self._connect() as conn:
+            current = conn.execute(
+                "SELECT * FROM lineage_candidate WHERE candidate_id = %s",
+                (candidate_id,),
+            ).fetchone()
+            if not current:
+                raise KeyError(candidate_id)
+            before = dict(current)
+            if before["status"] not in {"pending", "needs_more_context"}:
+                raise ValueError("only pending or needs_more_context candidates can be edited")
+
+            set_clauses = [f"{field} = %s" for field in sanitized]
+            params = list(sanitized.values())
+            params.extend([reviewer, comment, candidate_id])
+            row = conn.execute(
+                f"""
+                UPDATE lineage_candidate
+                SET {", ".join(set_clauses)},
+                    reviewer = %s,
+                    review_comment = %s,
+                    updated_at = now()
+                WHERE candidate_id = %s
+                RETURNING *
+                """,
+                tuple(params),
+            ).fetchone()
+            after = dict(row)
+            conn.execute(
+                """
+                INSERT INTO review_event
+                  (review_event_id, candidate_id, action, reviewer, comment,
+                   before_status, after_status, payload)
+                VALUES (%s, %s, 'edit', %s, %s, %s, %s, %s::jsonb)
+                ON CONFLICT DO NOTHING
+                """,
+                (
+                    event_id,
+                    candidate_id,
+                    reviewer,
+                    comment,
+                    before["status"],
+                    after["status"],
+                    _json({"before": _event_fields(before, sanitized), "after": _event_fields(after, sanitized)}),
+                ),
+            )
+        return after
+
     def get_candidate(self, candidate_id: str) -> dict[str, Any]:
         with self._connect() as conn:
             row = conn.execute("SELECT * FROM lineage_candidate WHERE candidate_id = %s", (candidate_id,)).fetchone()
@@ -151,6 +232,57 @@ def candidate_id_for(candidate: LineageCandidate, node_urn: str | None, code_urn
     )
 
 
+def validate_candidate_updates(updates: dict[str, Any]) -> dict[str, Any]:
+    sanitized: dict[str, Any] = {}
+    for field, value in updates.items():
+        if field not in EDITABLE_FIELDS:
+            continue
+        if field in {"proposed_src_urn", "proposed_dst_urn", "rationale"}:
+            text = _required_text(value, field)
+            sanitized[field] = text
+        elif field == "proposed_kind":
+            text = _required_text(value, field)
+            if text not in ALLOWED_REVIEW_KINDS:
+                raise ValueError(f"unsupported proposed_kind: {text}")
+            sanitized[field] = text
+        elif field == "proposed_edge_scope":
+            text = _required_text(value, field)
+            if text not in ALLOWED_REVIEW_SCOPES:
+                raise ValueError(f"unsupported proposed_edge_scope: {text}")
+            sanitized[field] = text
+        elif field == "proposed_confidence":
+            confidence = float(value)
+            if confidence < 0 or confidence > 1:
+                raise ValueError("proposed_confidence must be between 0 and 1")
+            sanitized[field] = confidence
+        elif field in {"line_start", "line_end"}:
+            sanitized[field] = _optional_positive_int(value, field)
+    start = sanitized.get("line_start")
+    end = sanitized.get("line_end")
+    if start is not None and end is not None and end < start:
+        raise ValueError("line_end must be >= line_start")
+    return sanitized
+
+
+def _required_text(value: Any, field: str) -> str:
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError(f"{field} is required")
+    return value.strip()
+
+
+def _optional_positive_int(value: Any, field: str) -> int | None:
+    if value in {None, ""}:
+        return None
+    result = int(value)
+    if result <= 0:
+        raise ValueError(f"{field} must be positive")
+    return result
+
+
+def _event_fields(row: dict[str, Any], fields: dict[str, Any]) -> dict[str, Any]:
+    return {field: row.get(field) for field in fields}
+
+
 def _action(status: str) -> str:
     return "accept" if status == "accepted" else "reject" if status == "rejected" else "needs_more_context"
 
@@ -160,4 +292,16 @@ def _stable_id(prefix: str, *parts: str) -> str:
 
 
 def _json(value: Any) -> str:
-    return json.dumps(value, ensure_ascii=False, sort_keys=True)
+    return json.dumps(_jsonable(value), ensure_ascii=False, sort_keys=True)
+
+
+def _jsonable(value: Any) -> Any:
+    if isinstance(value, Decimal):
+        return float(value)
+    if isinstance(value, datetime):
+        return value.isoformat()
+    if isinstance(value, dict):
+        return {key: _jsonable(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_jsonable(item) for item in value]
+    return value

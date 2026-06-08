@@ -26,8 +26,9 @@ Validated on 2026-06-09:
 - Long/complex script AI candidate ingestion is implemented in
   `scripts/analyze_dataarts_scripts_with_ai.py`.
 - The Web UI now renders directed upstream/downstream data flow and supports
-  accepting review candidates.
-- PostgreSQL and Neo4j currently contain 9348 entities and 21606 relationships.
+  inspecting, editing, accepting, and rejecting review candidates.
+- PostgreSQL and Neo4j currently contain 9350 entities and 21607 relationships.
+- `src/datatracex/review/api.py` provides the review queue service layer.
 
 Open-source parsing is only reliable for clear SQL statements, explicit OBS
 paths, and simple static references. Many real Python, shell, Flink, and dynamic

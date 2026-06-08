@@ -8,15 +8,15 @@ Validated on 2026-06-09.
 PostgreSQL: ok
 Neo4j: ok
 schema versions: 001_schema, 002_lineage_core_upgrade, 003_ai_review
-tests: 20 passed
+tests: 22 passed
 ```
 
 Current fact-store snapshot:
 
 ```text
-entities: 9348
-edges: 21606
-evidence: 3712
+entities: 9350
+edges: 21607
+evidence: 3713
 raw_payload: 1297
 script_detail payloads: 778
 CodeArtifact entities: 777
@@ -65,8 +65,8 @@ payload using the mock provider. The reviewer accepted it from the Web UI:
 ```text
 pending before: 1
 pending after: 0
-manual_review accepted candidates: 3
-Neo4j projection after acceptance: 9348 entities, 21606 relationships
+manual_review accepted candidates: 4
+Neo4j projection after acceptance: 9350 entities, 21607 relationships
 ```
 
 Real AI execution is wired through the OpenAI-compatible provider. It is not run
@@ -85,7 +85,7 @@ Validated surfaces:
 - Dense graph rendering without label overlap
 - Node detail panel
 - Review Queue list
-- Accept action from UI
+- Inspect/edit/accept/reject actions from UI
 - Neo4j-backed graph refresh after projection
 
 Latest browser validation loaded:
@@ -97,6 +97,18 @@ links: 600
 data-flow arrow links: 146
 visible node labels in dense mode: 1
 pending candidates after accept: 0
+```
+
+Manual edit workflow validation:
+
+```text
+new pending candidate: cand_d4638afe8a299704fbf67534d21378df7cf18f349a5586e9720293b289d5b6ba
+Inspect loaded redacted script snippet: yes
+Edit changed target: dws://ai-edit/dw/public/fact_orders_corrected
+Edit changed confidence: 0.69
+review_event actions: edit, accept
+materialized edge source_system: manual_review
+corrected target graph: 2 nodes, 1 DERIVES_FROM link
 ```
 
 The page is served by:

@@ -109,8 +109,8 @@ python scripts/project_to_neo4j.py
 Current graph projection:
 
 ```text
-Entity nodes: 9348
-Relationships: 21606
+Entity nodes: 9350
+Relationships: 21607
 ```
 
 ## Script Content Ingestion

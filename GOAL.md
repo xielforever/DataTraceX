@@ -17,12 +17,12 @@ development pass, read:
 - 4509 DataArts nodes are materialized.
 - 778 DataArts script payloads are ingested.
 - 777 `CodeArtifact` entities are materialized from script content hashes.
-- PostgreSQL contains 9348 entities and 21606 lineage/design relationships.
+- PostgreSQL contains 9350 entities and 21607 lineage/design relationships.
 - Neo4j contains the current graph projection.
 - AI-assisted candidate persistence, manual review materialization, and the
   lineage Web UI now have an end-to-end validation path.
 - The Web UI renders directed data flow with upstream/downstream layout and
-  manual review actions.
+  manual inspect/edit/accept/reject review actions.
 
 ## Non-Negotiable Rules
 
@@ -50,8 +50,8 @@ deterministic collection:
 Current implemented state:
 
 - Script ingestion, CodeArtifact materialization, SQL script lineage derivation,
-  AI candidate persistence, manual acceptance, and Neo4j projection are
-  implemented and validated.
+  AI candidate persistence, manual inspect/edit/accept/reject, and Neo4j
+  projection are implemented and validated.
 - Real AI execution requires `DATATRACEX_AI_API_KEY`,
   `DATATRACEX_AI_BASE_URL`, and `DATATRACEX_AI_MODEL`; mock-provider validation
   is complete.

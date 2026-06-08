@@ -5,7 +5,9 @@ import pytest
 from datatracex.ai.chunker import chunk_script
 from datatracex.ai.lineage_analyzer import analyze_script_with_ai, parse_candidate_response
 from datatracex.ai.provider import MockAIProvider
+from datatracex.ai.repository import validate_candidate_updates
 from datatracex.ai.redaction import redact_sensitive_text
+from datatracex.review.api import redacted_script_snippet
 
 
 def test_redacts_common_secret_patterns() -> None:
@@ -90,3 +92,34 @@ def test_analyze_script_with_mock_provider() -> None:
 
     assert len(candidates) == 1
     assert responses[0]["redactions"] == 1
+
+
+def test_validate_candidate_updates_allows_review_edits() -> None:
+    updates = validate_candidate_updates(
+        {
+            "proposed_src_urn": "obs://bucket/input",
+            "proposed_dst_urn": "dws://cluster/db/schema/table",
+            "proposed_kind": "derives_from",
+            "proposed_edge_scope": "inferred",
+            "proposed_confidence": "0.82",
+            "rationale": "reviewer corrected direction",
+            "line_start": "3",
+            "line_end": "5",
+            "ignored": "nope",
+        }
+    )
+
+    assert updates["proposed_confidence"] == 0.82
+    assert updates["line_start"] == 3
+    assert "ignored" not in updates
+
+
+def test_redacted_script_snippet_uses_line_window_without_secret_leak() -> None:
+    payload = {"content": "line1\npassword=hidden\nread('obs://bucket/input')\nline4\nline5"}
+
+    snippet = redacted_script_snippet(payload, 2, 3)
+
+    assert snippet is not None
+    assert snippet["start_line"] == 1
+    assert "hidden" not in snippet["text"]
+    assert "password=***" in snippet["text"]

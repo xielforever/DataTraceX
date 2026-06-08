@@ -13,9 +13,7 @@ import psycopg
 from neo4j import GraphDatabase
 from psycopg.rows import dict_row
 
-from .ai.repository import LineageCandidateRepository
-from .postgres_store import PostgresFactStore
-from .review.materialize import CandidateMaterializer
+from .review.api import ReviewQueueService
 from .settings import AppSettings
 
 
@@ -26,6 +24,7 @@ class LineageWebApp:
             settings.neo4j.uri,
             auth=(settings.neo4j.user, settings.neo4j.password),
         )
+        self.review_service = ReviewQueueService(settings.postgres.dsn)
 
     def close(self) -> None:
         self.neo4j_driver.close()
@@ -108,19 +107,19 @@ class LineageWebApp:
         return {"root": urn, "nodes": nodes, "links": links}
 
     def candidates(self, status: str = "pending", limit: int = 50) -> list[dict[str, Any]]:
-        repo = LineageCandidateRepository(self.settings.postgres.dsn)
-        return [_jsonable(row) for row in repo.list_candidates(status=status, limit=limit)]
+        return [_jsonable(row) for row in self.review_service.list_candidates(status=status, limit=limit)]
+
+    def candidate_detail(self, candidate_id: str) -> dict[str, Any]:
+        return _jsonable(self.review_service.candidate_detail(candidate_id))
+
+    def edit_candidate(self, candidate_id: str, payload: dict[str, Any], reviewer: str = "web") -> dict[str, Any]:
+        return _jsonable(self.review_service.edit_candidate(candidate_id, payload, reviewer=reviewer))
 
     def accept_candidate(self, candidate_id: str, reviewer: str = "web") -> dict[str, Any]:
-        repo = LineageCandidateRepository(self.settings.postgres.dsn)
-        materializer = CandidateMaterializer(PostgresFactStore(self.settings.postgres.dsn), repo)
-        edge_id = materializer.accept_and_materialize(candidate_id, reviewer, "accepted from web")
-        return {"candidate_id": candidate_id, "edge_id": edge_id}
+        return self.review_service.accept_candidate(candidate_id, reviewer=reviewer, comment="accepted from web")
 
     def reject_candidate(self, candidate_id: str, reviewer: str = "web") -> dict[str, Any]:
-        repo = LineageCandidateRepository(self.settings.postgres.dsn)
-        repo.update_status(candidate_id, "rejected", reviewer, "rejected from web")
-        return {"candidate_id": candidate_id, "status": "rejected"}
+        return self.review_service.reject_candidate(candidate_id, reviewer=reviewer, comment="rejected from web")
 
 
 class WebHandler(BaseHTTPRequestHandler):
@@ -150,17 +149,31 @@ class WebHandler(BaseHTTPRequestHandler):
             qs = parse_qs(parsed.query)
             self._json(self.app.candidates(qs.get("status", ["pending"])[0]))
             return
+        parts = [unquote(part) for part in parsed.path.strip("/").split("/")]
+        if len(parts) == 3 and parts[:2] == ["api", "candidates"]:
+            try:
+                self._json(self.app.candidate_detail(parts[2]))
+            except KeyError:
+                self._json({"error": "candidate not found"}, status=404)
+            return
         self._json({"error": "not found"}, status=404)
 
     def do_POST(self) -> None:
         parsed = urlparse(self.path)
         parts = [unquote(part) for part in parsed.path.strip("/").split("/")]
-        if len(parts) == 4 and parts[:2] == ["api", "candidates"] and parts[3] in {"accept", "reject"}:
+        if len(parts) == 4 and parts[:2] == ["api", "candidates"] and parts[3] in {"accept", "reject", "edit"}:
             candidate_id = parts[2]
-            if parts[3] == "accept":
-                self._json(self.app.accept_candidate(candidate_id))
-            else:
-                self._json(self.app.reject_candidate(candidate_id))
+            try:
+                if parts[3] == "accept":
+                    self._json(self.app.accept_candidate(candidate_id))
+                elif parts[3] == "reject":
+                    self._json(self.app.reject_candidate(candidate_id))
+                else:
+                    self._json(self.app.edit_candidate(candidate_id, self._read_json()))
+            except KeyError:
+                self._json({"error": "candidate not found"}, status=404)
+            except ValueError as exc:
+                self._json({"error": str(exc)}, status=400)
             return
         self._json({"error": "not found"}, status=404)
 
@@ -182,6 +195,12 @@ class WebHandler(BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)
+
+    def _read_json(self) -> dict[str, Any]:
+        length = int(self.headers.get("Content-Length") or 0)
+        if length <= 0:
+            return {}
+        return json.loads(self.rfile.read(length).decode("utf-8"))
 
 
 def serve_web(settings: AppSettings, host: str = "127.0.0.1", port: int = 8787) -> None:
@@ -300,6 +319,18 @@ INDEX_HTML = r"""<!doctype html>
       height: 36px;
     }
     input { width: 100%; padding: 0 10px; }
+    textarea {
+      width: 100%;
+      min-height: 58px;
+      resize: vertical;
+      border: 2px solid var(--line);
+      background: #fbfdfb;
+      color: var(--ink);
+      font-family: "Cascadia Mono", Consolas, monospace;
+      font-size: 11px;
+      padding: 8px;
+      letter-spacing: 0;
+    }
     button {
       cursor: pointer;
       padding: 0 12px;
@@ -404,6 +435,9 @@ INDEX_HTML = r"""<!doctype html>
     .actions { display: flex; gap: 8px; margin-top: 8px; }
     .accept { background: #bfe3c8; }
     .reject { background: #efb7a9; }
+    .inspect { background: #dceef0; }
+    .edit { background: #f7df93; }
+    .save { background: #d4edb4; }
     .candidate .lineage {
       margin-top: 6px;
       font-family: "Cascadia Mono", Consolas, monospace;
@@ -411,6 +445,39 @@ INDEX_HTML = r"""<!doctype html>
       font-size: 11px;
       overflow-wrap: anywhere;
     }
+    .candidate-detail, .edit-form {
+      margin-top: 10px;
+      border-top: 2px solid var(--line);
+      padding-top: 10px;
+    }
+    .snippet {
+      margin: 8px 0 0;
+      max-height: 220px;
+      overflow: auto;
+      background: #101411;
+      color: #eef7ef;
+      border: 2px solid var(--line);
+      padding: 8px;
+      font-family: "Cascadia Mono", Consolas, monospace;
+      font-size: 11px;
+      white-space: pre-wrap;
+    }
+    .edit-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-top: 8px;
+    }
+    .edit-grid label {
+      display: grid;
+      gap: 4px;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 800;
+      text-transform: uppercase;
+    }
+    .edit-grid label.wide { grid-column: 1 / 3; }
+    .edit-grid input, .edit-grid select { height: 32px; font-size: 12px; }
     .node text { font-size: 11px; pointer-events: none; paint-order: stroke; stroke: rgba(255,255,255,.88); stroke-width: 4px; stroke-linejoin: round; }
     .node circle { stroke: var(--line); stroke-width: 2; }
     .link { fill: none; stroke: var(--line); stroke-width: 1.6; opacity: .64; }
@@ -475,6 +542,7 @@ INDEX_HTML = r"""<!doctype html>
   <script>
     const $ = (id) => document.getElementById(id);
     let currentGraph = {nodes: [], links: []};
+    let candidateCache = new Map();
 
     async function loadStats() {
       const stats = await fetch('/api/stats').then(r => r.json());
@@ -511,20 +579,89 @@ INDEX_HTML = r"""<!doctype html>
 
     async function loadCandidates() {
       const rows = await fetch('/api/candidates?status=pending').then(r => r.json());
-      $('candidates').innerHTML = rows.map(row => `
-        <div class="candidate">
+      candidateCache = new Map(rows.map(row => [row.candidate_id, row]));
+      $('candidates').innerHTML = rows.map(renderCandidateCard).join('');
+      document.querySelectorAll('.inspect').forEach(btn => btn.onclick = () => inspectCandidate(btn.dataset.id));
+      document.querySelectorAll('.edit').forEach(btn => btn.onclick = () => showEditForm(btn.dataset.id));
+      document.querySelectorAll('.save').forEach(btn => btn.onclick = () => saveCandidateEdit(btn.dataset.id));
+      document.querySelectorAll('.accept').forEach(btn => btn.onclick = () => review(btn.dataset.id, 'accept'));
+      document.querySelectorAll('.reject').forEach(btn => btn.onclick = () => review(btn.dataset.id, 'reject'));
+    }
+
+    function renderCandidateCard(row) {
+      return `
+        <div class="candidate" id="candidate-${escapeAttr(row.candidate_id)}">
           <strong>${escapeHtml(row.proposed_kind)} ${Number(row.proposed_confidence).toFixed(2)}</strong>
           <div class="lineage">${escapeHtml(row.proposed_src_urn)} -> ${escapeHtml(row.proposed_dst_urn)}</div>
           <div class="meta">${escapeHtml(row.rationale)}</div>
           <div class="meta" title="${escapeHtml(row.node_urn || '')}">${escapeHtml(shortLabel(row.node_urn || '', 72))} ${lineRange(row)}</div>
           <div class="actions">
-            <button class="accept" data-id="${row.candidate_id}">Accept</button>
-            <button class="reject" data-id="${row.candidate_id}">Reject</button>
+            <button class="inspect" data-id="${escapeAttr(row.candidate_id)}">Inspect</button>
+            <button class="edit" data-id="${escapeAttr(row.candidate_id)}">Edit</button>
+            <button class="accept" data-id="${escapeAttr(row.candidate_id)}">Accept</button>
+            <button class="reject" data-id="${escapeAttr(row.candidate_id)}">Reject</button>
           </div>
+          <div class="candidate-detail" hidden></div>
+          <div class="edit-form" hidden>${renderEditForm(row)}</div>
         </div>
-      `).join('');
-      document.querySelectorAll('.accept').forEach(btn => btn.onclick = () => review(btn.dataset.id, 'accept'));
-      document.querySelectorAll('.reject').forEach(btn => btn.onclick = () => review(btn.dataset.id, 'reject'));
+      `;
+    }
+
+    function renderEditForm(row) {
+      const kinds = ['reads', 'writes', 'derives_from', 'uses_connection', 'executes_on', 'depends_on', 'contains'];
+      const scopes = ['inferred', 'design', 'run'];
+      return `
+        <div class="edit-grid">
+          <label class="wide">Source URN<textarea data-field="proposed_src_urn">${escapeHtml(row.proposed_src_urn)}</textarea></label>
+          <label class="wide">Target URN<textarea data-field="proposed_dst_urn">${escapeHtml(row.proposed_dst_urn)}</textarea></label>
+          <label>Kind<select data-field="proposed_kind">${kinds.map(kind => `<option ${kind === row.proposed_kind ? 'selected' : ''}>${kind}</option>`).join('')}</select></label>
+          <label>Scope<select data-field="proposed_edge_scope">${scopes.map(scope => `<option ${scope === row.proposed_edge_scope ? 'selected' : ''}>${scope}</option>`).join('')}</select></label>
+          <label>Confidence<input data-field="proposed_confidence" value="${escapeAttr(row.proposed_confidence)}" /></label>
+          <label>Line Start<input data-field="line_start" value="${escapeAttr(row.line_start || '')}" /></label>
+          <label>Line End<input data-field="line_end" value="${escapeAttr(row.line_end || '')}" /></label>
+          <label class="wide">Rationale<textarea data-field="rationale">${escapeHtml(row.rationale)}</textarea></label>
+        </div>
+        <div class="actions"><button class="save" data-id="${escapeAttr(row.candidate_id)}">Save</button></div>
+      `;
+    }
+
+    async function inspectCandidate(id) {
+      const card = document.getElementById(`candidate-${cssSafe(id)}`);
+      const panel = card?.querySelector('.candidate-detail');
+      if (!panel) return;
+      const detail = await fetch(`/api/candidates/${encodeURIComponent(id)}`).then(r => r.json());
+      const ev = detail.evidence;
+      const snippet = detail.snippet;
+      panel.hidden = false;
+      panel.innerHTML = `
+        <div class="meta">${escapeHtml(ev?.summary || 'No source evidence linked')}</div>
+        <div class="meta">${escapeHtml(ev?.source_api || '')} ${escapeHtml(ev?.payload_hash || '')}</div>
+        ${snippet ? `<pre class="snippet">${escapeHtml(snippet.text)}${snippet.truncated ? '\n...' : ''}</pre>` : '<div class="meta">No script snippet available.</div>'}
+      `;
+    }
+
+    function showEditForm(id) {
+      const card = document.getElementById(`candidate-${cssSafe(id)}`);
+      const form = card?.querySelector('.edit-form');
+      if (form) form.hidden = !form.hidden;
+    }
+
+    async function saveCandidateEdit(id) {
+      const card = document.getElementById(`candidate-${cssSafe(id)}`);
+      if (!card) return;
+      const updates = {};
+      card.querySelectorAll('[data-field]').forEach(input => {
+        const value = input.value;
+        updates[input.dataset.field] = value === '' && input.dataset.field.startsWith('line_') ? null : value;
+      });
+      await fetch(`/api/candidates/${encodeURIComponent(id)}/edit`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({updates, comment: 'edited from review UI'})
+      }).then(async response => {
+        if (!response.ok) throw new Error((await response.json()).error || 'edit failed');
+      });
+      await loadCandidates();
     }
 
     async function review(id, action) {
@@ -647,6 +784,8 @@ INDEX_HTML = r"""<!doctype html>
     function escapeHtml(value) {
       return String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
     }
+    function escapeAttr(value) { return escapeHtml(value); }
+    function cssSafe(value) { return String(value).replace(/[^a-zA-Z0-9_-]/g, '_'); }
     $('searchBtn').onclick = search;
     $('q').onkeydown = (e) => { if (e.key === 'Enter') search(); };
     function loadInitialFromPath() {
