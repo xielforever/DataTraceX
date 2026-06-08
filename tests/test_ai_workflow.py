@@ -94,6 +94,52 @@ def test_analyze_script_with_mock_provider() -> None:
     assert responses[0]["redactions"] == 1
 
 
+def test_analyze_script_retries_invalid_json_response() -> None:
+    valid_response = json.dumps(
+        {
+            "candidates": [
+                {
+                    "source_urn": "obs://bucket/input",
+                    "target_urn": "dws://cluster/db/schema/table",
+                    "edge_kind": "reads",
+                    "confidence": 0.6,
+                    "rationale": "retry produced valid JSON",
+                }
+            ]
+        }
+    )
+    provider = MockAIProvider(["not-json", valid_response])
+
+    candidates, responses = analyze_script_with_ai(
+        provider,
+        "read('obs://bucket/input')",
+        "dataarts://workspace/job/job/node/node",
+        "code://sha256/demo",
+        "mock",
+        response_retries=1,
+    )
+
+    assert len(candidates) == 1
+    assert provider.calls == 2
+    assert responses[0]["accepted"] is False
+    assert responses[0]["parse_error"]
+    assert responses[1]["accepted"] is True
+
+
+def test_analyze_script_raises_after_json_retry_budget() -> None:
+    provider = MockAIProvider(["not-json", "still-not-json"])
+
+    with pytest.raises(ValueError, match="after 2 attempts"):
+        analyze_script_with_ai(
+            provider,
+            "read('obs://bucket/input')",
+            "dataarts://workspace/job/job/node/node",
+            "code://sha256/demo",
+            "mock",
+            response_retries=1,
+        )
+
+
 def test_validate_candidate_updates_allows_review_edits() -> None:
     updates = validate_candidate_updates(
         {

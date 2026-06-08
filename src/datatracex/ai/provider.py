@@ -33,11 +33,14 @@ class AIProvider(ABC):
 
 
 class MockAIProvider(AIProvider):
-    def __init__(self, response_text: str) -> None:
-        self.response_text = response_text
+    def __init__(self, response_text: str | list[str]) -> None:
+        self.response_texts = [response_text] if isinstance(response_text, str) else list(response_text)
+        self.calls = 0
 
     def complete(self, request: AIRequest) -> AIResponse:
-        return AIResponse(self.response_text, provider="mock", model=request.model, raw={"mock": True})
+        index = min(self.calls, len(self.response_texts) - 1)
+        self.calls += 1
+        return AIResponse(self.response_texts[index], provider="mock", model=request.model, raw={"mock": True})
 
 
 class OpenAICompatibleProvider(AIProvider):

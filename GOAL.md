@@ -52,6 +52,8 @@ Current implemented state:
 - Script ingestion, CodeArtifact materialization, SQL script lineage derivation,
   AI candidate persistence, manual inspect/edit/accept/reject, and Neo4j
   projection are implemented and validated.
+- AI output validation rejects invalid JSON/schema responses and retries before
+  any candidate is persisted.
 - Real AI execution requires `DATATRACEX_AI_API_KEY`,
   `DATATRACEX_AI_BASE_URL`, and `DATATRACEX_AI_MODEL`; mock-provider validation
   is complete.

@@ -25,6 +25,8 @@ Validated on 2026-06-09:
   table-level edges.
 - Long/complex script AI candidate ingestion is implemented in
   `scripts/analyze_dataarts_scripts_with_ai.py`.
+- AI strict JSON validation now retries invalid/schema-bad responses and records
+  rejected attempts with `parse_error`.
 - The Web UI now renders directed upstream/downstream data flow and supports
   inspecting, editing, accepting, and rejecting review candidates.
 - PostgreSQL and Neo4j currently contain 9350 entities and 21607 relationships.

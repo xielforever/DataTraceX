@@ -32,6 +32,9 @@ def main() -> int:
     parser.add_argument("--node-type", action="append", dest="node_types")
     parser.add_argument("--min-lines", type=int, default=20)
     parser.add_argument("--max-lines", type=int, default=160)
+    parser.add_argument("--response-retries", type=int, default=1)
+    parser.add_argument("--max-tokens", type=int, default=2000)
+    parser.add_argument("--timeout-seconds", type=int, default=60)
     parser.add_argument("--model")
     parser.add_argument("--mock-response")
     parser.add_argument("--retries", type=int, default=2)
@@ -99,6 +102,9 @@ def main() -> int:
                 code_urn,
                 model=model or "mock-lineage",
                 max_lines=args.max_lines,
+                response_retries=args.response_retries,
+                max_tokens=args.max_tokens,
+                timeout_seconds=args.timeout_seconds,
             )
         except Exception as exc:
             summary["errors"].append(f"{ref.script_name}@{ref.script_version or 'latest'}: {exc}")

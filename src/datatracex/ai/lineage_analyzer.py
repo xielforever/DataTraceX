@@ -43,6 +43,7 @@ def build_user_prompt(node_urn: str, code_urn: str, chunk: ScriptChunk) -> str:
                         "rationale": "short explanation",
                         "line_start": "optional original start line",
                         "line_end": "optional original end line",
+                        "unresolved_assumptions": "optional list of uncertainties",
                     }
                 ]
             },
@@ -59,6 +60,17 @@ def build_user_prompt(node_urn: str, code_urn: str, chunk: ScriptChunk) -> str:
     )
 
 
+def build_retry_prompt(original_prompt: str, parse_error: str) -> str:
+    return json.dumps(
+        {
+            "task": "Repair the previous response. Return only strict JSON matching the schema.",
+            "parse_error": parse_error,
+            "original_request": json.loads(original_prompt),
+        },
+        ensure_ascii=False,
+    )
+
+
 def analyze_script_with_ai(
     provider: AIProvider,
     text: str,
@@ -66,26 +78,52 @@ def analyze_script_with_ai(
     code_urn: str,
     model: str,
     max_lines: int = 160,
+    response_retries: int = 1,
+    max_tokens: int = 2000,
+    timeout_seconds: int = 60,
 ) -> tuple[list[LineageCandidate], list[dict[str, Any]]]:
     redacted = redact_sensitive_text(text)
     candidates: list[LineageCandidate] = []
     responses: list[dict[str, Any]] = []
     for chunk in chunk_script(redacted.text, max_lines=max_lines):
         prompt = build_user_prompt(node_urn, code_urn, chunk)
-        response = provider.complete(AIRequest(SYSTEM_PROMPT, prompt, model=model))
-        parsed = parse_candidate_response(response.text)
-        responses.append(
-            {
+        parse_error: str | None = None
+        for attempt in range(response_retries + 1):
+            user_prompt = prompt if parse_error is None else build_retry_prompt(prompt, parse_error)
+            response = provider.complete(
+                AIRequest(
+                    SYSTEM_PROMPT,
+                    user_prompt,
+                    model=model,
+                    max_tokens=max_tokens,
+                    timeout_seconds=timeout_seconds,
+                )
+            )
+            record = {
                 "provider": response.provider,
                 "model": response.model,
                 "chunk_index": chunk.index,
-                "prompt_hash": _hash(prompt),
+                "attempt": attempt,
+                "prompt_hash": _hash(user_prompt),
                 "response_hash": _hash(response.text),
                 "raw": response.raw,
                 "redactions": redacted.replacements,
+                "parse_error": None,
+                "accepted": False,
             }
-        )
-        candidates.extend(parsed)
+            try:
+                parsed = parse_candidate_response(response.text)
+            except (json.JSONDecodeError, TypeError, ValueError) as exc:
+                parse_error = str(exc)
+                record["parse_error"] = parse_error
+                responses.append(record)
+                if attempt >= response_retries:
+                    raise ValueError(f"AI response did not match candidate schema after {attempt + 1} attempts: {parse_error}") from exc
+                continue
+            record["accepted"] = True
+            responses.append(record)
+            candidates.extend(parsed)
+            break
     return candidates, responses
 
 

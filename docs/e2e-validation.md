@@ -8,7 +8,7 @@ Validated on 2026-06-09.
 PostgreSQL: ok
 Neo4j: ok
 schema versions: 001_schema, 002_lineage_core_upgrade, 003_ai_review
-tests: 22 passed
+tests: 24 passed
 ```
 
 Current fact-store snapshot:
@@ -72,6 +72,10 @@ Neo4j projection after acceptance: 9350 entities, 21607 relationships
 Real AI execution is wired through the OpenAI-compatible provider. It is not run
 until `DATATRACEX_AI_API_KEY`, `DATATRACEX_AI_BASE_URL`, and
 `DATATRACEX_AI_MODEL` are provided.
+
+The AI analyzer validates strict JSON candidate responses. Invalid JSON or
+schema-invalid responses are rejected, recorded with `parse_error`, and retried
+within the configured retry budget.
 
 ## Frontend
 
