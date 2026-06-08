@@ -1,0 +1,43 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: datatracex-postgres
+    environment:
+      POSTGRES_DB: datatracex
+      POSTGRES_USER: datatracex
+      POSTGRES_PASSWORD: datatracex
+    ports:
+      - "5432:5432"
+    volumes:
+      - datatracex-postgres:/var/lib/postgresql/data
+      - ./infra/postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U datatracex -d datatracex"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  neo4j:
+    image: neo4j:5
+    container_name: datatracex-neo4j
+    environment:
+      NEO4J_AUTH: neo4j/datatracex_graph
+      NEO4J_server_memory_heap_initial__size: 512m
+      NEO4J_server_memory_heap_max__size: 1G
+      NEO4J_server_memory_pagecache_size: 512m
+    ports:
+      - "7474:7474"
+      - "7687:7687"
+    volumes:
+      - datatracex-neo4j-data:/data
+      - datatracex-neo4j-logs:/logs
+    healthcheck:
+      test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://localhost:7474 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+
+volumes:
+  datatracex-postgres:
+  datatracex-neo4j-data:
+  datatracex-neo4j-logs:

@@ -1,0 +1,22 @@
+[project]
+name = "datatracex"
+version = "0.1.0"
+description = "Run-centric evidence lineage system for DataArts, OBS, CDM, MRS, DWS, Python, and Flink."
+requires-python = ">=3.13"
+dependencies = [
+  "neo4j>=5.0,<6.0",
+  "psycopg[binary,pool]>=3.2,<4.0",
+  "sqlglot>=25.0,<30.0",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.0,<10.0",
+]
+
+[project.scripts]
+datatracex = "datatracex.cli:main"
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
