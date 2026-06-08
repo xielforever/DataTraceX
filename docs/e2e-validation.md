@@ -85,6 +85,11 @@ Validated surfaces:
 - Search by job/table/URN text
 - Full graph rendering in SVG
 - Directed upstream/downstream data-flow layout
+- Default data-flow view filtering `READS`, `WRITES`, and `DERIVES_FROM`
+- Full Graph toggle for infrastructure/context edges
+- Lane-based source/focus/target graph presentation
+- Inbound/outbound relation panels with clickable edge selection
+- Structured selected-node and selected-edge details
 - Arrow rendering for `READS`, `WRITES`, and `DERIVES_FROM`
 - Dense graph rendering without label overlap
 - Node detail panel
@@ -101,6 +106,20 @@ links: 600
 data-flow arrow links: 146
 visible node labels in dense mode: 1
 pending candidates after accept: 0
+```
+
+Latest lineage-flow UI validation:
+
+```text
+large root: dws://dws_dev/th_ai/sdi_th/sdi_th_etl_program_log
+large graph default mode: data flow | 147/418 nodes | 146/600 links
+large graph lanes: 3
+large graph inbound cards rendered: 40
+small root: dws://ai-edit/dw/public/fact_orders_corrected
+small graph default mode: data flow | 2/2 nodes | 1/1 links
+edge selection: selected edge and selected relation card highlighted
+edge detail: DERIVES_FROM 0.69 / manual_review / mock-lineage / reviewer web
+browser console errors: 0
 ```
 
 Manual edit workflow validation:

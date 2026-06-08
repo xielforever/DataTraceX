@@ -271,7 +271,7 @@ INDEX_HTML = r"""<!doctype html>
     }
     .shell {
       display: grid;
-      grid-template-columns: 340px minmax(0, 1fr) 380px;
+      grid-template-columns: 300px minmax(0, 1fr) 320px;
       grid-template-rows: 58px minmax(0, 1fr);
       height: 100vh;
     }
@@ -308,7 +308,7 @@ INDEX_HTML = r"""<!doctype html>
       grid-template-rows: auto minmax(0, 1fr);
     }
     .search {
-      padding: 14px;
+      padding: 12px;
       border-bottom: 2px solid var(--line);
     }
     input, select, button {
@@ -360,24 +360,66 @@ INDEX_HTML = r"""<!doctype html>
     .meta { color: var(--muted); font-size: 12px; margin-top: 4px; overflow-wrap: anywhere; }
     main {
       display: grid;
-      grid-template-rows: 48px minmax(0, 1fr) 188px;
+      grid-template-rows: 82px minmax(0, 1fr) 232px;
       background: rgba(255,255,255,.38);
     }
     .flowbar {
       display: grid;
-      grid-template-columns: 1fr auto 1fr;
-      align-items: center;
+      grid-template-rows: 38px 42px;
       gap: 10px;
       border-bottom: 2px solid var(--line);
       background: rgba(255,255,255,.72);
-      padding: 0 14px;
+      padding: 0 12px;
       font-size: 12px;
       font-weight: 900;
       text-transform: uppercase;
     }
-    .flowbar span:nth-child(1) { text-align: left; color: var(--read); }
-    .flowbar span:nth-child(2) { text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .flowbar span:nth-child(3) { text-align: right; color: var(--write); }
+    .axis-row, .toolbar-row {
+      display: grid;
+      align-items: center;
+      gap: 12px;
+      min-width: 0;
+    }
+    .axis-row { grid-template-columns: 1fr minmax(0, 1.4fr) 1fr; }
+    .toolbar-row { grid-template-columns: auto minmax(0, 1fr) auto; }
+    .axis-row span:nth-child(1) { text-align: left; color: var(--read); }
+    .axis-row span:nth-child(2) { text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .axis-row span:nth-child(3) { text-align: right; color: var(--write); }
+    .segmented {
+      display: inline-grid;
+      grid-template-columns: 1fr 1fr;
+      border: 2px solid var(--line);
+      box-shadow: 3px 3px 0 var(--line);
+      background: var(--panel);
+      width: 210px;
+    }
+    .segmented button {
+      border: 0;
+      box-shadow: none;
+      height: 30px;
+      font-size: 11px;
+      padding: 0 8px;
+    }
+    .segmented button.active { background: var(--ink); color: var(--paper); }
+    .metrics {
+      justify-self: center;
+      max-width: 100%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      color: var(--muted);
+      font-size: 11px;
+    }
+    .focus-chip {
+      justify-self: end;
+      border: 2px solid var(--line);
+      background: var(--root);
+      padding: 5px 8px;
+      max-width: 100%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
     .canvas {
       position: relative;
       min-height: 0;
@@ -398,20 +440,101 @@ INDEX_HTML = r"""<!doctype html>
       font-size: 12px;
       font-weight: 800;
       max-width: calc(100% - 24px);
+      pointer-events: none;
     }
     .pill {
       border: 2px solid var(--line);
       background: var(--panel);
       padding: 4px 8px;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
     }
+    .pill::before {
+      content: "";
+      width: 9px;
+      height: 9px;
+      border: 2px solid var(--line);
+      background: var(--line);
+    }
+    .pill.read::before { background: var(--read); }
+    .pill.write::before { background: var(--write); }
+    .pill.derive::before { background: var(--derive); }
+    .pill.context::before { background: var(--design); }
+    .pill.focus::before { background: var(--root); }
     .detail {
       border-top: 2px solid var(--line);
-      background: var(--ink);
-      color: var(--paper);
-      padding: 12px;
+      background: rgba(255,255,255,.92);
+      color: var(--ink);
+      overflow: hidden;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(220px, 1.1fr);
+      min-height: 0;
+    }
+    .trace-column {
+      min-width: 0;
       overflow: auto;
-      font-family: "Cascadia Mono", Consolas, monospace;
+      border-right: 2px solid var(--line);
+      padding: 10px;
+    }
+    .trace-column:last-child { border-right: 0; }
+    .trace-column h3 {
+      margin: 0 0 8px;
       font-size: 12px;
+      text-transform: uppercase;
+    }
+    .relation-item {
+      border: 2px solid var(--line);
+      background: #fff;
+      margin-bottom: 8px;
+      padding: 8px;
+      cursor: pointer;
+    }
+    .relation-item.selected { background: #fff1b8; }
+    .relation-item strong { display: block; font-size: 12px; overflow-wrap: anywhere; }
+    .relation-item .path {
+      margin-top: 4px;
+      color: var(--muted);
+      font-family: "Cascadia Mono", Consolas, monospace;
+      font-size: 10px;
+      overflow-wrap: anywhere;
+    }
+    .empty-note {
+      border: 2px dashed var(--line);
+      padding: 10px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .selected-card {
+      font-size: 12px;
+      white-space: normal;
+      overflow-wrap: anywhere;
+    }
+    .selected-title {
+      font-weight: 900;
+      font-size: 13px;
+      margin-bottom: 8px;
+    }
+    .kv {
+      display: grid;
+      grid-template-columns: 92px minmax(0, 1fr);
+      gap: 6px 8px;
+      border-top: 2px solid var(--line);
+      padding-top: 8px;
+    }
+    .kv span:nth-child(odd) {
+      color: var(--muted);
+      font-weight: 900;
+      text-transform: uppercase;
+      font-size: 10px;
+    }
+    .urn-line {
+      margin-top: 8px;
+      padding: 8px;
+      border: 2px solid var(--line);
+      background: #f7faf8;
+      font-family: "Cascadia Mono", Consolas, monospace;
+      font-size: 10px;
     }
     .right {
       border-left: 2px solid var(--line);
@@ -486,6 +609,11 @@ INDEX_HTML = r"""<!doctype html>
     .link.derives_from { stroke: var(--derive); marker-end: url(#arrow-derive); }
     .link.uses_code { stroke: var(--code); stroke-dasharray: 6 5; }
     .link.contains, .link.depends_on, .link.uses_connection, .link.executes_on { stroke: var(--design); stroke-dasharray: 4 5; opacity: .42; }
+    .link.dimmed, .node.dimmed { opacity: .18; }
+    .link.selected { stroke-width: 4; opacity: 1; }
+    .node.selected circle { stroke-width: 4; }
+    .lane-band { fill: rgba(255,255,255,.58); stroke: rgba(17,20,18,.18); stroke-width: 1; }
+    .lane-label { fill: rgba(17,20,18,.36); font-size: 10px; font-weight: 900; letter-spacing: 0; text-transform: uppercase; }
     .link-label {
       font-size: 10px;
       font-weight: 900;
@@ -495,16 +623,26 @@ INDEX_HTML = r"""<!doctype html>
       stroke-width: 3px;
       stroke-linejoin: round;
     }
-    @media (max-width: 1100px) {
-      .shell { grid-template-columns: 280px minmax(0, 1fr); }
+    @media (max-width: 1240px) {
+      .shell { grid-template-columns: 300px minmax(0, 1fr); }
       .right { display: none; }
       header { grid-column: 1 / 3; }
+    }
+    @media (max-width: 980px) {
+      .shell { grid-template-columns: 260px minmax(0, 1fr); }
+      main { grid-template-rows: 120px minmax(0, 1fr) 260px; }
+      .detail { grid-template-columns: 1fr 1fr; }
+      .trace-column:last-child { grid-column: 1 / 3; border-top: 2px solid var(--line); }
+      .toolbar-row { grid-template-columns: 1fr; gap: 4px; }
+      .segmented, .focus-chip, .metrics { justify-self: start; }
     }
     @media (max-width: 760px) {
       .shell { grid-template-columns: 1fr; grid-template-rows: 58px 220px minmax(0, 1fr); }
       header { grid-column: 1; }
       aside { border-right: 0; border-bottom: 2px solid var(--line); }
       main { min-height: 0; }
+      .detail { grid-template-columns: 1fr; }
+      .trace-column { border-right: 0; border-bottom: 2px solid var(--line); }
     }
   </style>
 </head>
@@ -525,14 +663,28 @@ INDEX_HTML = r"""<!doctype html>
       <div class="results" id="results"></div>
     </aside>
     <main>
-      <div class="flowbar"><span>Upstream</span><span id="rootName">No root selected</span><span>Downstream</span></div>
+      <div class="flowbar">
+        <div class="axis-row"><span>Upstream</span><span id="rootName">No root selected</span><span>Downstream</span></div>
+        <div class="toolbar-row">
+          <div class="segmented">
+            <button class="active" data-mode="flow">Data Flow</button>
+            <button data-mode="full">Full Graph</button>
+          </div>
+          <div class="metrics" id="graphMetrics"></div>
+          <div class="focus-chip" id="focusChip">No focus</div>
+        </div>
+      </div>
       <div class="canvas">
         <div class="legend">
-          <span class="pill">READS</span><span class="pill">WRITES</span><span class="pill">DEPENDS</span><span class="pill">REVIEW</span>
+          <span class="pill read">READS</span><span class="pill write">WRITES</span><span class="pill derive">DERIVES</span><span class="pill context">CONTEXT</span><span class="pill focus">FOCUS</span>
         </div>
         <svg id="graph"></svg>
       </div>
-      <pre class="detail" id="detail">{}</pre>
+      <section class="detail">
+        <div class="trace-column"><h3>Inbound</h3><div id="inboundList"></div></div>
+        <div class="trace-column"><h3>Outbound</h3><div id="outboundList"></div></div>
+        <div class="trace-column"><h3>Selected</h3><div class="selected-card" id="selectedDetail">{}</div></div>
+      </section>
     </main>
     <section class="right">
       <h2>Review Queue</h2>
@@ -543,6 +695,9 @@ INDEX_HTML = r"""<!doctype html>
     const $ = (id) => document.getElementById(id);
     let currentGraph = {nodes: [], links: []};
     let candidateCache = new Map();
+    let viewMode = 'flow';
+    let selectedNodeUrn = null;
+    let selectedEdgeId = null;
 
     async function loadStats() {
       const stats = await fetch('/api/stats').then(r => r.json());
@@ -573,7 +728,8 @@ INDEX_HTML = r"""<!doctype html>
       const depth = $('depth').value;
       const graph = await fetch(`/api/lineage?urn=${encodeURIComponent(urn)}&depth=${depth}`).then(r => r.json());
       currentGraph = graph;
-      $('detail').textContent = JSON.stringify({root: graph.root, nodes: graph.nodes.length, links: graph.links.length}, null, 2);
+      selectedNodeUrn = graph.root;
+      selectedEdgeId = null;
       renderGraph(graph);
     }
 
@@ -676,18 +832,44 @@ INDEX_HTML = r"""<!doctype html>
       const height = svg.clientHeight || 600;
       svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
       $('rootName').textContent = shortLabel(graph.root || 'No root selected', 72);
-      const nodes = graph.nodes.map((n) => ({...n, x: width/2, y: height/2, layer: null}));
-      const byUrn = Object.fromEntries(nodes.map(n => [n.urn, n]));
-      const links = graph.links
-        .filter(l => byUrn[l.source] && byUrn[l.target])
+      const allNodes = graph.nodes.map((n) => ({...n, x: width/2, y: height/2, layer: null}));
+      const allByUrn = Object.fromEntries(allNodes.map(n => [n.urn, n]));
+      const allLinks = graph.links
+        .filter(l => allByUrn[l.source] && allByUrn[l.target])
         .map(l => ({...l, ...flowEndpoints(l)}));
+      const flowLinks = allLinks.filter(isDataFlow);
+      let viewLinks = viewMode === 'flow' ? flowLinks : allLinks;
+      if (!viewLinks.length) viewLinks = allLinks;
+      const visibleUrns = new Set([graph.root]);
+      viewLinks.forEach(link => {
+        visibleUrns.add(link.source);
+        visibleUrns.add(link.target);
+        visibleUrns.add(link.flowSource);
+        visibleUrns.add(link.flowTarget);
+      });
+      const nodes = allNodes
+        .filter(node => visibleUrns.has(node.urn))
+        .map(node => ({...node, layer: null}));
+      const byUrn = Object.fromEntries(nodes.map(n => [n.urn, n]));
+      const links = viewLinks.filter(l => byUrn[l.source] && byUrn[l.target]);
+      if (selectedNodeUrn && !byUrn[selectedNodeUrn]) selectedNodeUrn = graph.root;
+      if (selectedEdgeId && !links.some(link => edgeKey(link) === selectedEdgeId)) selectedEdgeId = null;
       layoutFlow(nodes, links, byUrn, graph.root, width, height);
+      $('graphMetrics').textContent = `${viewMode === 'flow' ? 'data flow' : 'full graph'} | ${nodes.length}/${graph.nodes.length} nodes | ${links.length}/${allLinks.length} links`;
+      $('focusChip').textContent = shortLabel(byUrn[selectedNodeUrn || graph.root]?.name || selectedNodeUrn || graph.root, 46);
       const defs = `
         <defs>
           <marker id="arrow-read" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L0,6 L9,3 z" fill="var(--read)"></path></marker>
           <marker id="arrow-write" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L0,6 L9,3 z" fill="var(--write)"></path></marker>
           <marker id="arrow-derive" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L0,6 L9,3 z" fill="var(--derive)"></path></marker>
         </defs>`;
+      const laneMarkup = `
+        <rect class="lane-band" x="12" y="52" width="${Math.max(1, width / 3 - 18)}" height="${Math.max(1, height - 74)}"></rect>
+        <rect class="lane-band" x="${width / 3 + 6}" y="52" width="${Math.max(1, width / 3 - 12)}" height="${Math.max(1, height - 74)}"></rect>
+        <rect class="lane-band" x="${(width * 2) / 3 + 6}" y="52" width="${Math.max(1, width / 3 - 18)}" height="${Math.max(1, height - 74)}"></rect>
+        <text class="lane-label" x="22" y="66">source side</text>
+        <text class="lane-label" x="${width / 2 - 22}" y="66">focus</text>
+        <text class="lane-label" x="${width - 94}" y="66">target side</text>`;
       const linkMarkup = links.map(l => {
         const s = byUrn[l.flowSource], t = byUrn[l.flowTarget];
         const midX = (s.x + t.x) / 2;
@@ -695,8 +877,12 @@ INDEX_HTML = r"""<!doctype html>
         const dx = t.x - s.x;
         const curve = Math.max(-80, Math.min(80, dx * 0.18));
         const path = `M${s.x},${s.y} C${s.x + curve},${s.y} ${t.x - curve},${t.y} ${t.x},${t.y}`;
+        const key = edgeKey(l);
+        const unrelatedToSelectedNode = selectedNodeUrn && !(l.source === selectedNodeUrn || l.target === selectedNodeUrn || l.flowSource === selectedNodeUrn || l.flowTarget === selectedNodeUrn);
+        const dimmed = (selectedEdgeId && selectedEdgeId !== key) || unrelatedToSelectedNode ? ' dimmed' : '';
+        const selected = selectedEdgeId === key ? ' selected' : '';
         return `<g>
-          <path class="link ${String(l.type || '').toLowerCase()}" d="${path}"><title>${escapeHtml(l.type)} ${l.confidence ?? ''}</title></path>
+          <path class="link ${String(l.type || '').toLowerCase()}${dimmed}${selected}" data-edge="${escapeAttr(key)}" d="${path}"><title>${escapeHtml(l.type)} ${l.confidence ?? ''}</title></path>
           ${isDataFlow(l) && links.length <= 140 ? `<text class="link-label" x="${midX}" y="${midY - 6}">${escapeHtml(String(l.type || '').toUpperCase())}</text>` : ''}
         </g>`;
       }).join('');
@@ -704,22 +890,98 @@ INDEX_HTML = r"""<!doctype html>
         const fill = colorFor(n.kind);
         const label = shortLabel(n.name || n.urn, 34);
         const showLabel = nodes.length <= 120 || n.urn === graph.root;
-        return `<g class="node" transform="translate(${n.x},${n.y})" data-urn="${encodeURIComponent(n.urn)}">
+        const selected = selectedNodeUrn === n.urn ? ' selected' : '';
+        const connectedToSelected = selectedNodeUrn && links.some(link =>
+          (link.source === selectedNodeUrn || link.target === selectedNodeUrn || link.flowSource === selectedNodeUrn || link.flowTarget === selectedNodeUrn) &&
+          (link.source === n.urn || link.target === n.urn || link.flowSource === n.urn || link.flowTarget === n.urn)
+        );
+        const dimmed = selectedNodeUrn && selectedNodeUrn !== n.urn && !connectedToSelected ? ' dimmed' : '';
+        return `<g class="node${selected}${dimmed}" transform="translate(${n.x},${n.y})" data-urn="${encodeURIComponent(n.urn)}">
           <title>${escapeHtml(n.urn)}</title>
           <circle r="${n.urn === graph.root ? 14 : (nodes.length > 240 ? 6 : 9)}" fill="${n.urn === graph.root ? 'var(--root)' : fill}"></circle>
           ${showLabel ? `<text x="13" y="4">${escapeHtml(label)}</text>` : ''}
         </g>`;
       }).join('');
-      svg.innerHTML = defs + linkMarkup + nodeMarkup;
+      svg.innerHTML = defs + laneMarkup + linkMarkup + nodeMarkup;
       [...svg.querySelectorAll('.node')].forEach(el => {
         el.onclick = () => {
           const urn = decodeURIComponent(el.dataset.urn);
-          const node = byUrn[urn];
-          const connected = links.filter(l => l.source === urn || l.target === urn || l.flowSource === urn || l.flowTarget === urn);
-          $('detail').textContent = JSON.stringify({node, connected}, null, 2);
+          selectedNodeUrn = urn;
+          selectedEdgeId = null;
+          renderGraph(currentGraph);
         };
         el.ondblclick = () => loadLineage(decodeURIComponent(el.dataset.urn));
       });
+      [...svg.querySelectorAll('.link')].forEach(el => {
+        el.onclick = () => {
+          selectedEdgeId = el.dataset.edge;
+          selectedNodeUrn = null;
+          renderGraph(currentGraph);
+        };
+      });
+      renderTracePanel(graph, nodes, links, byUrn);
+    }
+
+    function renderTracePanel(graph, nodes, links, byUrn) {
+      const focusUrn = selectedNodeUrn || graph.root;
+      const focus = byUrn[focusUrn] || graph.nodes.find(node => node.urn === focusUrn) || {urn: focusUrn, name: focusUrn, kind: 'unknown'};
+      const inbound = links.filter(link => link.flowTarget === focusUrn).sort(sortByConfidence);
+      const outbound = links.filter(link => link.flowSource === focusUrn).sort(sortByConfidence);
+      $('inboundList').innerHTML = relationListMarkup(inbound, byUrn, 'in');
+      $('outboundList').innerHTML = relationListMarkup(outbound, byUrn, 'out');
+
+      const selectedLink = selectedEdgeId ? links.find(link => edgeKey(link) === selectedEdgeId) : null;
+      if (selectedLink) {
+        const attrs = parseAttrs(selectedLink.attrs_json);
+        $('selectedDetail').innerHTML = `
+          <div class="selected-title">${escapeHtml(String(selectedLink.type || '').toUpperCase())} ${Number(selectedLink.confidence || 0).toFixed(2)}</div>
+          <div class="kv">
+            <span>scope</span><span>${escapeHtml(selectedLink.edge_scope || '')}</span>
+            <span>system</span><span>${escapeHtml(selectedLink.source_system || '')}</span>
+            <span>model</span><span>${escapeHtml(attrs.ai_model || attrs.parser || '')}</span>
+            <span>reviewer</span><span>${escapeHtml(attrs.reviewer || '')}</span>
+          </div>
+          <div class="urn-line">${escapeHtml(selectedLink.flowSource)}\n-> ${escapeHtml(selectedLink.flowTarget)}</div>
+        `;
+      } else {
+        $('selectedDetail').innerHTML = `
+          <div class="selected-title">${escapeHtml(focus.name || focus.urn)}</div>
+          <div class="kv">
+            <span>kind</span><span>${escapeHtml(focus.kind || '')}</span>
+            <span>system</span><span>${escapeHtml(focus.source_system || '')}</span>
+            <span>inbound</span><span>${inbound.length}</span>
+            <span>outbound</span><span>${outbound.length}</span>
+            <span>view</span><span>${nodes.length}/${graph.nodes.length} nodes, ${links.length}/${graph.links.length} links</span>
+          </div>
+          <div class="urn-line">${escapeHtml(focus.urn)}</div>
+        `;
+      }
+
+      document.querySelectorAll('.relation-item').forEach(item => {
+        item.onclick = () => {
+          selectedEdgeId = item.dataset.edge;
+          selectedNodeUrn = null;
+          renderGraph(currentGraph);
+        };
+      });
+    }
+
+    function relationListMarkup(items, byUrn, direction) {
+      if (!items.length) {
+        return `<div class="empty-note">${direction === 'in' ? 'No inbound flow for the current focus.' : 'No outbound flow for the current focus.'}</div>`;
+      }
+      return items.slice(0, 40).map(link => {
+        const key = edgeKey(link);
+        const source = byUrn[link.flowSource] || {name: link.flowSource, kind: 'unknown'};
+        const target = byUrn[link.flowTarget] || {name: link.flowTarget, kind: 'unknown'};
+        const active = selectedEdgeId === key ? ' selected' : '';
+        return `
+          <div class="relation-item${active}" data-edge="${escapeAttr(key)}">
+            <strong>${escapeHtml(shortLabel(source.name || source.urn, 30))} -> ${escapeHtml(shortLabel(target.name || target.urn, 30))}</strong>
+            <div class="meta">${escapeHtml(String(link.type || '').toUpperCase())} ${Number(link.confidence || 0).toFixed(2)} / ${escapeHtml(link.source_system || '')}</div>
+            <div class="path">${escapeHtml(link.flowSource)}\n${escapeHtml(link.flowTarget)}</div>
+          </div>`;
+      }).join('');
     }
 
     function flowEndpoints(link) {
@@ -729,6 +991,16 @@ INDEX_HTML = r"""<!doctype html>
     }
     function isDataFlow(link) {
       return ['reads', 'writes', 'derives_from'].includes(String(link.type || '').toLowerCase());
+    }
+    function edgeKey(link) {
+      return link.edge_id || `${link.source}|${link.target}|${link.type || ''}`;
+    }
+    function sortByConfidence(a, b) {
+      return Number(b.confidence || 0) - Number(a.confidence || 0);
+    }
+    function parseAttrs(value) {
+      if (!value) return {};
+      try { return JSON.parse(value); } catch { return value; }
     }
     function layoutFlow(nodes, links, byUrn, root, width, height) {
       if (!nodes.length) return;
@@ -788,6 +1060,14 @@ INDEX_HTML = r"""<!doctype html>
     function cssSafe(value) { return String(value).replace(/[^a-zA-Z0-9_-]/g, '_'); }
     $('searchBtn').onclick = search;
     $('q').onkeydown = (e) => { if (e.key === 'Enter') search(); };
+    document.querySelectorAll('[data-mode]').forEach(button => {
+      button.onclick = () => {
+        viewMode = button.dataset.mode;
+        selectedEdgeId = null;
+        document.querySelectorAll('[data-mode]').forEach(item => item.classList.toggle('active', item.dataset.mode === viewMode));
+        renderGraph(currentGraph);
+      };
+    });
     function loadInitialFromPath() {
       const prefix = '/lineage/nodes/';
       if (location.pathname.startsWith(prefix)) {
