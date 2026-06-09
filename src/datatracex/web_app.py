@@ -676,6 +676,8 @@ INDEX_HTML = r"""<!doctype html>
     .link.contains, .link.uses_connection, .link.executes_on { stroke: var(--design); stroke-dasharray: 4 5; opacity: .42; }
     .link.dimmed, .node.dimmed { opacity: .18; }
     .link.selected { stroke-width: 4; opacity: 1; }
+    .dense-flow .link { stroke-width: 1.05; opacity: .34; }
+    .dense-flow .link.selected { stroke-width: 4; opacity: 1; }
     .node.selected rect { stroke-width: 4; }
     .lane-band { fill: rgba(255,255,255,.58); stroke: rgba(17,20,18,.16); stroke-width: 1; }
     .lane-band.focus { fill: rgba(255,212,71,.18); }
@@ -777,7 +779,7 @@ INDEX_HTML = r"""<!doctype html>
     let dragState = null;
     const CARD_W = 214;
     const CARD_H = 70;
-    const COL_GAP = 286;
+    const COL_GAP = 360;
     const ROW_GAP = 96;
 
     async function loadStats() {
@@ -967,13 +969,13 @@ INDEX_HTML = r"""<!doctype html>
         const path = edgePath(s, t);
         const label = edgeLabelPoint(s, t);
         const key = edgeKey(l);
-        const unrelatedToSelectedNode = selectedNodeUrn && !(l.source === selectedNodeUrn || l.target === selectedNodeUrn || l.flowSource === selectedNodeUrn || l.flowTarget === selectedNodeUrn);
+        const unrelatedToSelectedNode = viewMode === 'full' && selectedNodeUrn && !(l.source === selectedNodeUrn || l.target === selectedNodeUrn || l.flowSource === selectedNodeUrn || l.flowTarget === selectedNodeUrn);
         const dimmed = (selectedEdgeId && selectedEdgeId !== key) || unrelatedToSelectedNode ? ' dimmed' : '';
         const selected = selectedEdgeId === key ? ' selected' : '';
         return `<g>
           <path class="link-hit" data-edge="${escapeAttr(key)}" d="${path}"></path>
           <path class="link ${String(l.type || '').toLowerCase()}${dimmed}${selected}" data-edge="${escapeAttr(key)}" d="${path}"><title>${escapeHtml(l.type)} ${l.confidence ?? ''}</title></path>
-          ${isLineageFlow(l) && links.length <= 180 ? `<text class="link-label" x="${label.x}" y="${label.y}">${escapeHtml(shortLabel(String(l.type || '').toUpperCase(), 12))}</text>` : ''}
+          ${isLineageFlow(l) && links.length <= 180 ? `<text class="link-label" text-anchor="middle" x="${label.x}" y="${label.y}">${escapeHtml(edgeDisplayType(l.type))}</text>` : ''}
         </g>`;
       }).join('');
       const nodeMarkup = nodes.map(n => {
@@ -985,7 +987,7 @@ INDEX_HTML = r"""<!doctype html>
           (link.source === selectedNodeUrn || link.target === selectedNodeUrn || link.flowSource === selectedNodeUrn || link.flowTarget === selectedNodeUrn) &&
           (link.source === n.urn || link.target === n.urn || link.flowSource === n.urn || link.flowTarget === n.urn)
         );
-        const dimmed = selectedNodeUrn && selectedNodeUrn !== n.urn && !connectedToSelected ? ' dimmed' : '';
+        const dimmed = viewMode === 'full' && selectedNodeUrn && selectedNodeUrn !== n.urn && !connectedToSelected ? ' dimmed' : '';
         return `<g class="node node-card${selected}${dimmed}" transform="translate(${n.x - CARD_W / 2},${n.y - CARD_H / 2})" data-urn="${encodeURIComponent(n.urn)}">
           <title>${escapeHtml(n.urn)}</title>
           <rect width="${CARD_W}" height="${CARD_H}" fill="${n.urn === focusUrn ? 'var(--root)' : fill}"></rect>
@@ -995,7 +997,7 @@ INDEX_HTML = r"""<!doctype html>
           <text class="node-urn" x="10" y="64">${escapeHtml(urn)}</text>
         </g>`;
       }).join('');
-      svg.innerHTML = defs + `<g id="graphViewport">${laneMarkup}${linkMarkup}${nodeMarkup}</g>`;
+      svg.innerHTML = defs + `<g id="graphViewport" class="${links.length > 120 ? 'dense-flow' : ''}">${laneMarkup}${linkMarkup}${nodeMarkup}</g>`;
       applyCanvasTransform();
       [...svg.querySelectorAll('.node')].forEach(el => {
         el.onclick = () => {
@@ -1186,6 +1188,8 @@ INDEX_HTML = r"""<!doctype html>
         height: Math.max(height, 120 + maxRows * ROW_GAP + CARD_H),
         focusX: 0,
         focusY: 0,
+        minLayer,
+        maxLayer: layerKeys[layerKeys.length - 1] ?? 0,
       };
       for (const layerInfo of layers) {
         const group = grouped.get(layerInfo.layer) || [];
@@ -1238,7 +1242,13 @@ INDEX_HTML = r"""<!doctype html>
       return `M${sx},${sy} C${c1},${sy} ${c2},${ty} ${tx},${ty}`;
     }
     function edgeLabelPoint(source, target) {
-      return {x: (source.x + target.x) / 2 - 26, y: (source.y + target.y) / 2 - 8};
+      return {x: (source.x + target.x) / 2, y: (source.y + target.y) / 2 - 10};
+    }
+    function edgeDisplayType(type) {
+      const value = String(type || '').toLowerCase();
+      if (value === 'derives_from') return 'DERIVES';
+      if (value === 'depends_on') return 'DEPENDS';
+      return String(type || '').toUpperCase();
     }
     function layerTitle(layer, count) {
       if (layer < 0) return `up ${Math.abs(layer)} / ${count}`;
@@ -1247,8 +1257,18 @@ INDEX_HTML = r"""<!doctype html>
     }
     function centerCanvasOn(x, y, width, height) {
       const current = canvasTransform.k || 0.85;
-      const nextScale = current < 0.7 ? 0.9 : Math.max(0.7, Math.min(1.05, current));
-      canvasTransform = {k: nextScale, x: width / 2 - x * nextScale, y: height / 2 - y * nextScale};
+      const spanLayers = Math.max(0, (canvasWorld.maxLayer || 0) - (canvasWorld.minLayer || 0));
+      const fitReadableScale = spanLayers > 0
+        ? Math.max(0.72, Math.min(1.05, (width - 60) / Math.max(1, spanLayers * COL_GAP + CARD_W + 80)))
+        : 1;
+      const nextScale = Math.min(current < 0.7 ? 0.9 : Math.max(0.7, Math.min(1.05, current)), fitReadableScale);
+      let focusScreenX = width / 2;
+      if ((canvasWorld.minLayer || 0) < 0 && (canvasWorld.maxLayer || 0) <= 0) {
+        focusScreenX = width - (CARD_W * nextScale) / 2 - 24;
+      } else if ((canvasWorld.minLayer || 0) >= 0 && (canvasWorld.maxLayer || 0) > 0) {
+        focusScreenX = (CARD_W * nextScale) / 2 + 24;
+      }
+      canvasTransform = {k: nextScale, x: focusScreenX - x * nextScale, y: height / 2 - y * nextScale};
     }
     function fitGraphToViewport(width, height) {
       const scale = Math.max(0.08, Math.min(1.1, Math.min((width - 80) / Math.max(1, canvasWorld.width), (height - 80) / Math.max(1, canvasWorld.height))));
