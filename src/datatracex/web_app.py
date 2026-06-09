@@ -424,12 +424,20 @@ INDEX_HTML = r"""<!doctype html>
       position: relative;
       min-height: 0;
       overflow: hidden;
+      background:
+        linear-gradient(90deg, rgba(17,20,18,.055) 1px, transparent 1px) 0 0/32px 32px,
+        linear-gradient(rgba(17,20,18,.045) 1px, transparent 1px) 0 0/32px 32px,
+        rgba(250,252,250,.72);
     }
     #graph {
       width: 100%;
       height: 100%;
       display: block;
+      cursor: grab;
+      user-select: none;
+      touch-action: none;
     }
+    #graph.dragging { cursor: grabbing; }
     .legend {
       position: absolute;
       left: 12px;
@@ -441,6 +449,7 @@ INDEX_HTML = r"""<!doctype html>
       font-weight: 800;
       max-width: calc(100% - 24px);
       pointer-events: none;
+      z-index: 2;
     }
     .pill {
       border: 2px solid var(--line);
@@ -462,6 +471,36 @@ INDEX_HTML = r"""<!doctype html>
     .pill.derive::before { background: var(--derive); }
     .pill.context::before { background: var(--design); }
     .pill.focus::before { background: var(--root); }
+    .canvas-controls {
+      position: absolute;
+      right: 12px;
+      top: 12px;
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      z-index: 3;
+    }
+    .canvas-controls button {
+      width: 34px;
+      height: 30px;
+      padding: 0;
+      font-size: 12px;
+      box-shadow: 2px 2px 0 var(--line);
+      background: var(--panel);
+    }
+    .canvas-controls button.wide {
+      width: auto;
+      padding: 0 8px;
+    }
+    .scale-readout {
+      border: 2px solid var(--line);
+      background: rgba(255,255,255,.92);
+      padding: 6px 8px;
+      min-width: 50px;
+      text-align: center;
+      font-size: 11px;
+      font-weight: 900;
+    }
     .detail {
       border-top: 2px solid var(--line);
       background: rgba(255,255,255,.92);
@@ -601,19 +640,46 @@ INDEX_HTML = r"""<!doctype html>
     }
     .edit-grid label.wide { grid-column: 1 / 3; }
     .edit-grid input, .edit-grid select { height: 32px; font-size: 12px; }
-    .node text { font-size: 11px; pointer-events: none; paint-order: stroke; stroke: rgba(255,255,255,.88); stroke-width: 4px; stroke-linejoin: round; }
-    .node circle { stroke: var(--line); stroke-width: 2; }
-    .link { fill: none; stroke: var(--line); stroke-width: 1.6; opacity: .64; }
+    .node { cursor: pointer; }
+    .node-card rect {
+      stroke: var(--line);
+      stroke-width: 2;
+      filter: drop-shadow(3px 3px 0 rgba(17,20,18,.18));
+    }
+    .node-card text {
+      pointer-events: none;
+      letter-spacing: 0;
+    }
+    .node-kind {
+      fill: var(--muted);
+      font-size: 9px;
+      font-weight: 900;
+      text-transform: uppercase;
+    }
+    .node-name {
+      fill: var(--ink);
+      font-size: 12px;
+      font-weight: 900;
+    }
+    .node-urn {
+      fill: var(--muted);
+      font-family: "Cascadia Mono", Consolas, monospace;
+      font-size: 9px;
+    }
+    .link { fill: none; stroke: var(--line); stroke-width: 1.8; opacity: .72; pointer-events: none; }
+    .link-hit { fill: none; stroke: transparent; stroke-width: 14; cursor: pointer; }
     .link.reads { stroke: var(--read); marker-end: url(#arrow-read); }
     .link.writes { stroke: var(--write); marker-end: url(#arrow-write); }
     .link.derives_from { stroke: var(--derive); marker-end: url(#arrow-derive); }
+    .link.depends_on { stroke: var(--design); marker-end: url(#arrow-context); }
     .link.uses_code { stroke: var(--code); stroke-dasharray: 6 5; }
-    .link.contains, .link.depends_on, .link.uses_connection, .link.executes_on { stroke: var(--design); stroke-dasharray: 4 5; opacity: .42; }
+    .link.contains, .link.uses_connection, .link.executes_on { stroke: var(--design); stroke-dasharray: 4 5; opacity: .42; }
     .link.dimmed, .node.dimmed { opacity: .18; }
     .link.selected { stroke-width: 4; opacity: 1; }
-    .node.selected circle { stroke-width: 4; }
-    .lane-band { fill: rgba(255,255,255,.58); stroke: rgba(17,20,18,.18); stroke-width: 1; }
-    .lane-label { fill: rgba(17,20,18,.36); font-size: 10px; font-weight: 900; letter-spacing: 0; text-transform: uppercase; }
+    .node.selected rect { stroke-width: 4; }
+    .lane-band { fill: rgba(255,255,255,.58); stroke: rgba(17,20,18,.16); stroke-width: 1; }
+    .lane-band.focus { fill: rgba(255,212,71,.18); }
+    .lane-label { fill: rgba(17,20,18,.44); font-size: 11px; font-weight: 900; letter-spacing: 0; text-transform: uppercase; }
     .link-label {
       font-size: 10px;
       font-weight: 900;
@@ -667,7 +733,7 @@ INDEX_HTML = r"""<!doctype html>
         <div class="axis-row"><span>Upstream</span><span id="rootName">No root selected</span><span>Downstream</span></div>
         <div class="toolbar-row">
           <div class="segmented">
-            <button class="active" data-mode="flow">Data Flow</button>
+            <button class="active" data-mode="flow">Lineage Flow</button>
             <button data-mode="full">Full Graph</button>
           </div>
           <div class="metrics" id="graphMetrics"></div>
@@ -677,6 +743,13 @@ INDEX_HTML = r"""<!doctype html>
       <div class="canvas">
         <div class="legend">
           <span class="pill read">READS</span><span class="pill write">WRITES</span><span class="pill derive">DERIVES</span><span class="pill context">CONTEXT</span><span class="pill focus">FOCUS</span>
+        </div>
+        <div class="canvas-controls">
+          <button id="zoomOut" title="Zoom out">-</button>
+          <span class="scale-readout" id="canvasScale">100%</span>
+          <button id="zoomIn" title="Zoom in">+</button>
+          <button class="wide" id="centerCanvas" title="Center the focused node">Center</button>
+          <button class="wide" id="fitCanvas" title="Fit the graph">Fit</button>
         </div>
         <svg id="graph"></svg>
       </div>
@@ -698,6 +771,14 @@ INDEX_HTML = r"""<!doctype html>
     let viewMode = 'flow';
     let selectedNodeUrn = null;
     let selectedEdgeId = null;
+    let canvasTransform = {x: 0, y: 0, k: 1};
+    let canvasWorld = {width: 0, height: 0, focusX: 0, focusY: 0};
+    let pendingViewport = 'center';
+    let dragState = null;
+    const CARD_W = 214;
+    const CARD_H = 70;
+    const COL_GAP = 286;
+    const ROW_GAP = 96;
 
     async function loadStats() {
       const stats = await fetch('/api/stats').then(r => r.json());
@@ -730,6 +811,7 @@ INDEX_HTML = r"""<!doctype html>
       currentGraph = graph;
       selectedNodeUrn = graph.root;
       selectedEdgeId = null;
+      pendingViewport = 'center';
       renderGraph(graph);
     }
 
@@ -837,16 +919,22 @@ INDEX_HTML = r"""<!doctype html>
       const allLinks = graph.links
         .filter(l => allByUrn[l.source] && allByUrn[l.target])
         .map(l => ({...l, ...flowEndpoints(l)}));
-      const flowLinks = allLinks.filter(isDataFlow);
+      const flowLinks = allLinks.filter(isLineageFlow);
       let viewLinks = viewMode === 'flow' ? flowLinks : allLinks;
       if (!viewLinks.length) viewLinks = allLinks;
-      const visibleUrns = new Set([graph.root]);
-      viewLinks.forEach(link => {
-        visibleUrns.add(link.source);
-        visibleUrns.add(link.target);
-        visibleUrns.add(link.flowSource);
-        visibleUrns.add(link.flowTarget);
-      });
+      const focusForVisibility = selectedNodeUrn || graph.root;
+      let visibleUrns = viewMode === 'flow' ? directedLineageUrns(focusForVisibility, viewLinks) : new Set();
+      if (!visibleUrns.size) visibleUrns = new Set([graph.root]);
+      if (viewMode !== 'flow') {
+        visibleUrns.add(graph.root);
+        if (selectedNodeUrn) visibleUrns.add(selectedNodeUrn);
+        viewLinks.forEach(link => {
+          visibleUrns.add(link.source);
+          visibleUrns.add(link.target);
+          visibleUrns.add(link.flowSource);
+          visibleUrns.add(link.flowTarget);
+        });
+      }
       const nodes = allNodes
         .filter(node => visibleUrns.has(node.urn))
         .map(node => ({...node, layer: null}));
@@ -854,68 +942,74 @@ INDEX_HTML = r"""<!doctype html>
       const links = viewLinks.filter(l => byUrn[l.source] && byUrn[l.target]);
       if (selectedNodeUrn && !byUrn[selectedNodeUrn]) selectedNodeUrn = graph.root;
       if (selectedEdgeId && !links.some(link => edgeKey(link) === selectedEdgeId)) selectedEdgeId = null;
-      layoutFlow(nodes, links, byUrn, graph.root, width, height);
-      $('graphMetrics').textContent = `${viewMode === 'flow' ? 'data flow' : 'full graph'} | ${nodes.length}/${graph.nodes.length} nodes | ${links.length}/${allLinks.length} links`;
-      $('focusChip').textContent = shortLabel(byUrn[selectedNodeUrn || graph.root]?.name || selectedNodeUrn || graph.root, 46);
+      const focusUrn = selectedNodeUrn || graph.root;
+      const layout = layoutCanvas(nodes, links, byUrn, focusUrn, width, height);
+      canvasWorld = layout.world;
+      if (pendingViewport === 'fit') fitGraphToViewport(width, height);
+      if (pendingViewport === 'center') centerCanvasOn(layout.world.focusX, layout.world.focusY, width, height);
+      pendingViewport = null;
+      $('graphMetrics').textContent = `${viewMode === 'flow' ? 'lineage flow' : 'full graph'} | ${layout.layers.length} layers | ${nodes.length}/${graph.nodes.length} nodes | ${links.length}/${allLinks.length} links`;
+      $('focusChip').textContent = shortLabel(byUrn[focusUrn]?.name || focusUrn || graph.root, 46);
       const defs = `
         <defs>
           <marker id="arrow-read" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L0,6 L9,3 z" fill="var(--read)"></path></marker>
           <marker id="arrow-write" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L0,6 L9,3 z" fill="var(--write)"></path></marker>
           <marker id="arrow-derive" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L0,6 L9,3 z" fill="var(--derive)"></path></marker>
+          <marker id="arrow-context" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth"><path d="M0,0 L0,6 L9,3 z" fill="var(--design)"></path></marker>
         </defs>`;
-      const laneMarkup = `
-        <rect class="lane-band" x="12" y="52" width="${Math.max(1, width / 3 - 18)}" height="${Math.max(1, height - 74)}"></rect>
-        <rect class="lane-band" x="${width / 3 + 6}" y="52" width="${Math.max(1, width / 3 - 12)}" height="${Math.max(1, height - 74)}"></rect>
-        <rect class="lane-band" x="${(width * 2) / 3 + 6}" y="52" width="${Math.max(1, width / 3 - 18)}" height="${Math.max(1, height - 74)}"></rect>
-        <text class="lane-label" x="22" y="66">source side</text>
-        <text class="lane-label" x="${width / 2 - 22}" y="66">focus</text>
-        <text class="lane-label" x="${width - 94}" y="66">target side</text>`;
+      const laneMarkup = layout.layers.map(layer => `
+        <rect class="lane-band${layer.layer === 0 ? ' focus' : ''}" x="${layer.x - CARD_W / 2 - 28}" y="28" width="${CARD_W + 56}" height="${Math.max(120, layout.world.height - 56)}"></rect>
+        <text class="lane-label" x="${layer.x - CARD_W / 2 - 18}" y="52">${escapeHtml(layerTitle(layer.layer, layer.count))}</text>
+      `).join('');
       const linkMarkup = links.map(l => {
         const s = byUrn[l.flowSource], t = byUrn[l.flowTarget];
-        const midX = (s.x + t.x) / 2;
-        const midY = (s.y + t.y) / 2;
-        const dx = t.x - s.x;
-        const curve = Math.max(-80, Math.min(80, dx * 0.18));
-        const path = `M${s.x},${s.y} C${s.x + curve},${s.y} ${t.x - curve},${t.y} ${t.x},${t.y}`;
+        if (!s || !t) return '';
+        const path = edgePath(s, t);
+        const label = edgeLabelPoint(s, t);
         const key = edgeKey(l);
         const unrelatedToSelectedNode = selectedNodeUrn && !(l.source === selectedNodeUrn || l.target === selectedNodeUrn || l.flowSource === selectedNodeUrn || l.flowTarget === selectedNodeUrn);
         const dimmed = (selectedEdgeId && selectedEdgeId !== key) || unrelatedToSelectedNode ? ' dimmed' : '';
         const selected = selectedEdgeId === key ? ' selected' : '';
         return `<g>
+          <path class="link-hit" data-edge="${escapeAttr(key)}" d="${path}"></path>
           <path class="link ${String(l.type || '').toLowerCase()}${dimmed}${selected}" data-edge="${escapeAttr(key)}" d="${path}"><title>${escapeHtml(l.type)} ${l.confidence ?? ''}</title></path>
-          ${isDataFlow(l) && links.length <= 140 ? `<text class="link-label" x="${midX}" y="${midY - 6}">${escapeHtml(String(l.type || '').toUpperCase())}</text>` : ''}
+          ${isLineageFlow(l) && links.length <= 180 ? `<text class="link-label" x="${label.x}" y="${label.y}">${escapeHtml(shortLabel(String(l.type || '').toUpperCase(), 12))}</text>` : ''}
         </g>`;
       }).join('');
       const nodeMarkup = nodes.map(n => {
         const fill = colorFor(n.kind);
-        const label = shortLabel(n.name || n.urn, 34);
-        const showLabel = nodes.length <= 120 || n.urn === graph.root;
+        const lines = labelLines(n.name || n.urn, 24, 2);
+        const urn = shortLabel(urnTail(n.urn), 32);
         const selected = selectedNodeUrn === n.urn ? ' selected' : '';
         const connectedToSelected = selectedNodeUrn && links.some(link =>
           (link.source === selectedNodeUrn || link.target === selectedNodeUrn || link.flowSource === selectedNodeUrn || link.flowTarget === selectedNodeUrn) &&
           (link.source === n.urn || link.target === n.urn || link.flowSource === n.urn || link.flowTarget === n.urn)
         );
         const dimmed = selectedNodeUrn && selectedNodeUrn !== n.urn && !connectedToSelected ? ' dimmed' : '';
-        return `<g class="node${selected}${dimmed}" transform="translate(${n.x},${n.y})" data-urn="${encodeURIComponent(n.urn)}">
+        return `<g class="node node-card${selected}${dimmed}" transform="translate(${n.x - CARD_W / 2},${n.y - CARD_H / 2})" data-urn="${encodeURIComponent(n.urn)}">
           <title>${escapeHtml(n.urn)}</title>
-          <circle r="${n.urn === graph.root ? 14 : (nodes.length > 240 ? 6 : 9)}" fill="${n.urn === graph.root ? 'var(--root)' : fill}"></circle>
-          ${showLabel ? `<text x="13" y="4">${escapeHtml(label)}</text>` : ''}
+          <rect width="${CARD_W}" height="${CARD_H}" fill="${n.urn === focusUrn ? 'var(--root)' : fill}"></rect>
+          <text class="node-kind" x="10" y="15">${escapeHtml(String(n.kind || 'unknown'))} / L${n.layer}</text>
+          <text class="node-name" x="10" y="34">${escapeHtml(lines[0] || '')}</text>
+          ${lines[1] ? `<text class="node-name" x="10" y="49">${escapeHtml(lines[1])}</text>` : ''}
+          <text class="node-urn" x="10" y="64">${escapeHtml(urn)}</text>
         </g>`;
       }).join('');
-      svg.innerHTML = defs + laneMarkup + linkMarkup + nodeMarkup;
+      svg.innerHTML = defs + `<g id="graphViewport">${laneMarkup}${linkMarkup}${nodeMarkup}</g>`;
+      applyCanvasTransform();
       [...svg.querySelectorAll('.node')].forEach(el => {
         el.onclick = () => {
           const urn = decodeURIComponent(el.dataset.urn);
           selectedNodeUrn = urn;
           selectedEdgeId = null;
+          pendingViewport = 'center';
           renderGraph(currentGraph);
         };
         el.ondblclick = () => loadLineage(decodeURIComponent(el.dataset.urn));
       });
-      [...svg.querySelectorAll('.link')].forEach(el => {
+      [...svg.querySelectorAll('.link-hit')].forEach(el => {
         el.onclick = () => {
           selectedEdgeId = el.dataset.edge;
-          selectedNodeUrn = null;
           renderGraph(currentGraph);
         };
       });
@@ -960,7 +1054,6 @@ INDEX_HTML = r"""<!doctype html>
       document.querySelectorAll('.relation-item').forEach(item => {
         item.onclick = () => {
           selectedEdgeId = item.dataset.edge;
-          selectedNodeUrn = null;
           renderGraph(currentGraph);
         };
       });
@@ -989,8 +1082,8 @@ INDEX_HTML = r"""<!doctype html>
       if (type === 'reads') return {flowSource: link.target, flowTarget: link.source};
       return {flowSource: link.source, flowTarget: link.target};
     }
-    function isDataFlow(link) {
-      return ['reads', 'writes', 'derives_from'].includes(String(link.type || '').toLowerCase());
+    function isLineageFlow(link) {
+      return ['reads', 'writes', 'derives_from', 'depends_on'].includes(String(link.type || '').toLowerCase());
     }
     function edgeKey(link) {
       return link.edge_id || `${link.source}|${link.target}|${link.type || ''}`;
@@ -1002,54 +1095,211 @@ INDEX_HTML = r"""<!doctype html>
       if (!value) return {};
       try { return JSON.parse(value); } catch { return value; }
     }
-    function layoutFlow(nodes, links, byUrn, root, width, height) {
-      if (!nodes.length) return;
-      const rootNode = byUrn[root] || nodes[0];
-      rootNode.layer = 0;
-      for (let pass = 0; pass < nodes.length + 2; pass++) {
-        let changed = false;
-        for (const link of links.filter(isDataFlow)) {
-          const s = byUrn[link.flowSource], t = byUrn[link.flowTarget];
-          if (!s || !t) continue;
-          if (s.layer !== null && t.layer === null) { t.layer = s.layer + 1; changed = true; }
-          if (t.layer !== null && s.layer === null) { s.layer = t.layer - 1; changed = true; }
-        }
-        if (!changed) break;
+    function connectedUrns(startUrn, links) {
+      const adjacency = new Map();
+      for (const link of links) {
+        if (!adjacency.has(link.flowSource)) adjacency.set(link.flowSource, []);
+        if (!adjacency.has(link.flowTarget)) adjacency.set(link.flowTarget, []);
+        adjacency.get(link.flowSource).push(link.flowTarget);
+        adjacency.get(link.flowTarget).push(link.flowSource);
       }
-      const context = nodes.filter(n => n.layer === null);
-      context.forEach((node, i) => { node.layer = i % 2 === 0 ? -1 : 1; node.context = true; });
-      const minLayer = Math.min(...nodes.map(n => n.layer));
-      const maxLayer = Math.max(...nodes.map(n => n.layer));
-      const span = Math.max(1, maxLayer - minLayer);
+      const seen = new Set();
+      const queue = [startUrn];
+      while (queue.length) {
+        const urn = queue.shift();
+        if (!urn || seen.has(urn)) continue;
+        seen.add(urn);
+        for (const next of adjacency.get(urn) || []) {
+          if (!seen.has(next)) queue.push(next);
+        }
+      }
+      return seen;
+    }
+    function directedLineageUrns(startUrn, links) {
+      const incoming = new Map();
+      const outgoing = new Map();
+      for (const link of links) {
+        if (!incoming.has(link.flowTarget)) incoming.set(link.flowTarget, []);
+        if (!outgoing.has(link.flowSource)) outgoing.set(link.flowSource, []);
+        incoming.get(link.flowTarget).push(link.flowSource);
+        outgoing.get(link.flowSource).push(link.flowTarget);
+      }
+      const seen = new Set([startUrn]);
+      collectDirected(startUrn, incoming, seen);
+      collectDirected(startUrn, outgoing, seen);
+      if (seen.size <= 1) return connectedUrns(startUrn, links);
+      return seen;
+    }
+    function collectDirected(startUrn, adjacency, seen) {
+      const queue = [startUrn];
+      while (queue.length) {
+        const urn = queue.shift();
+        for (const next of adjacency.get(urn) || []) {
+          if (!next || seen.has(next)) continue;
+          seen.add(next);
+          queue.push(next);
+        }
+      }
+    }
+    function layoutCanvas(nodes, links, byUrn, focusUrn, width, height) {
+      if (!nodes.length) {
+        return {layers: [], world: {width, height, focusX: width / 2, focusY: height / 2}};
+      }
+      const focus = byUrn[focusUrn] || nodes[0];
+      const incoming = new Map();
+      const outgoing = new Map();
+      for (const link of links.filter(isLineageFlow)) {
+        if (!byUrn[link.flowSource] || !byUrn[link.flowTarget]) continue;
+        if (!incoming.has(link.flowTarget)) incoming.set(link.flowTarget, []);
+        if (!outgoing.has(link.flowSource)) outgoing.set(link.flowSource, []);
+        incoming.get(link.flowTarget).push(link.flowSource);
+        outgoing.get(link.flowSource).push(link.flowTarget);
+      }
+      const upstream = new Map([[focus.urn, 0]]);
+      const downstream = new Map([[focus.urn, 0]]);
+      walkLayerDistances(focus.urn, incoming, upstream);
+      walkLayerDistances(focus.urn, outgoing, downstream);
+      for (const node of nodes) {
+        const up = upstream.get(node.urn);
+        const down = downstream.get(node.urn);
+        if (node.urn === focus.urn) node.layer = 0;
+        else if (up !== undefined && (down === undefined || up <= down)) node.layer = -up;
+        else if (down !== undefined) node.layer = down;
+        else node.layer = inferredContextLayer(node, links, focus.urn);
+      }
+
       const grouped = new Map();
       for (const node of nodes) {
         if (!grouped.has(node.layer)) grouped.set(node.layer, []);
         grouped.get(node.layer).push(node);
       }
-      for (const [layer, group] of grouped.entries()) {
-        group.sort((a, b) => String(a.kind).localeCompare(String(b.kind)) || String(a.name || a.urn).localeCompare(String(b.name || b.urn)));
-        const x = 80 + ((layer - minLayer) / span) * Math.max(1, width - 170);
-        const available = Math.max(120, height - 130);
-        const top = 78;
-        const maxPerColumn = Math.max(8, Math.floor(available / (nodes.length > 240 ? 13 : 22)));
-        const columns = Math.max(1, Math.ceil(group.length / maxPerColumn));
-        const columnGap = nodes.length > 240 ? 14 : 26;
-        const visibleRows = Math.ceil(group.length / columns);
-        const step = available / Math.max(visibleRows, 1);
+      const layerKeys = [...grouped.keys()].sort((a, b) => a - b);
+      const minLayer = layerKeys[0] ?? 0;
+      let maxRows = 1;
+      const layers = layerKeys.map(layer => {
+        const group = grouped.get(layer) || [];
+        maxRows = Math.max(maxRows, group.length);
+        return {layer, count: group.length, x: 120 + (layer - minLayer) * COL_GAP};
+      });
+      const world = {
+        width: Math.max(width, 240 + layerKeys.length * COL_GAP + CARD_W),
+        height: Math.max(height, 120 + maxRows * ROW_GAP + CARD_H),
+        focusX: 0,
+        focusY: 0,
+      };
+      for (const layerInfo of layers) {
+        const group = grouped.get(layerInfo.layer) || [];
+        group.sort(compareNodesForCanvas);
+        const groupHeight = (group.length - 1) * ROW_GAP;
+        const startY = Math.max(96, (world.height - groupHeight) / 2);
         group.forEach((node, i) => {
-          const column = Math.floor(i / maxPerColumn);
-          const row = i % maxPerColumn;
-          node.x = x + (column - (columns - 1) / 2) * columnGap;
-          node.y = top + step * (row + 0.5);
-          if (node.urn === root) {
-            node.x = width / 2;
-            node.y = height / 2;
-          }
+          node.x = layerInfo.x;
+          node.y = startY + i * ROW_GAP;
         });
       }
+      world.focusX = focus.x || width / 2;
+      world.focusY = focus.y || height / 2;
+      return {layers, world};
+    }
+    function walkLayerDistances(start, adjacency, distances) {
+      const queue = [start];
+      while (queue.length) {
+        const urn = queue.shift();
+        const nextDistance = (distances.get(urn) || 0) + 1;
+        for (const next of adjacency.get(urn) || []) {
+          if (distances.has(next) && distances.get(next) <= nextDistance) continue;
+          distances.set(next, nextDistance);
+          queue.push(next);
+        }
+      }
+    }
+    function inferredContextLayer(node, links, focusUrn) {
+      const touching = links.filter(link => link.source === node.urn || link.target === node.urn || link.flowSource === node.urn || link.flowTarget === node.urn);
+      if (touching.some(link => link.flowTarget === focusUrn)) return -1;
+      if (touching.some(link => link.flowSource === focusUrn)) return 1;
+      if (String(node.kind || '').toLowerCase() === 'connection') return -1;
+      return 1;
+    }
+    function compareNodesForCanvas(a, b) {
+      const ak = String(a.kind || '');
+      const bk = String(b.kind || '');
+      if (ak !== bk) return ak.localeCompare(bk);
+      return String(a.name || a.urn).localeCompare(String(b.name || b.urn));
+    }
+    function edgePath(source, target) {
+      const leftToRight = target.x >= source.x;
+      const sx = source.x + (leftToRight ? CARD_W / 2 : -CARD_W / 2);
+      const tx = target.x + (leftToRight ? -CARD_W / 2 : CARD_W / 2);
+      const sy = source.y;
+      const ty = target.y;
+      const dx = Math.max(60, Math.abs(tx - sx) * 0.42);
+      const c1 = leftToRight ? sx + dx : sx - dx;
+      const c2 = leftToRight ? tx - dx : tx + dx;
+      return `M${sx},${sy} C${c1},${sy} ${c2},${ty} ${tx},${ty}`;
+    }
+    function edgeLabelPoint(source, target) {
+      return {x: (source.x + target.x) / 2 - 26, y: (source.y + target.y) / 2 - 8};
+    }
+    function layerTitle(layer, count) {
+      if (layer < 0) return `up ${Math.abs(layer)} / ${count}`;
+      if (layer > 0) return `down ${layer} / ${count}`;
+      return `focus / ${count}`;
+    }
+    function centerCanvasOn(x, y, width, height) {
+      const current = canvasTransform.k || 0.85;
+      const nextScale = current < 0.7 ? 0.9 : Math.max(0.7, Math.min(1.05, current));
+      canvasTransform = {k: nextScale, x: width / 2 - x * nextScale, y: height / 2 - y * nextScale};
+    }
+    function fitGraphToViewport(width, height) {
+      const scale = Math.max(0.08, Math.min(1.1, Math.min((width - 80) / Math.max(1, canvasWorld.width), (height - 80) / Math.max(1, canvasWorld.height))));
+      canvasTransform = {k: scale, x: (width - canvasWorld.width * scale) / 2, y: (height - canvasWorld.height * scale) / 2};
+    }
+    function applyCanvasTransform() {
+      const viewport = document.getElementById('graphViewport');
+      if (viewport) viewport.setAttribute('transform', `translate(${canvasTransform.x},${canvasTransform.y}) scale(${canvasTransform.k})`);
+      const scale = $('canvasScale');
+      if (scale) scale.textContent = `${Math.round(canvasTransform.k * 100)}%`;
+    }
+    function zoomCanvas(multiplier) {
+      const svg = $('graph');
+      const width = svg.clientWidth || 900;
+      const height = svg.clientHeight || 600;
+      zoomCanvasAt(width / 2, height / 2, multiplier);
+    }
+    function zoomCanvasAt(screenX, screenY, multiplier) {
+      const oldScale = canvasTransform.k;
+      const nextScale = Math.max(0.08, Math.min(2.4, oldScale * multiplier));
+      const worldX = (screenX - canvasTransform.x) / oldScale;
+      const worldY = (screenY - canvasTransform.y) / oldScale;
+      canvasTransform = {k: nextScale, x: screenX - worldX * nextScale, y: screenY - worldY * nextScale};
+      applyCanvasTransform();
     }
     function colorFor(kind) {
       return {job:'#ffd447', node:'#98d7d9', dataset:'#c8e36e', path_prefix:'#ffac8b', connection:'#c6b7f2', code_artifact:'#80d6aa', workspace:'#ffffff'}[kind] || '#dfe4e0';
+    }
+    function labelLines(value, limit = 24, maxLines = 2) {
+      const text = String(value || '');
+      const lines = [];
+      let rest = text;
+      while (rest && lines.length < maxLines) {
+        if (rest.length <= limit) {
+          lines.push(rest);
+          rest = '';
+        } else {
+          lines.push(rest.slice(0, limit - (lines.length === maxLines - 1 ? 3 : 0)) + (lines.length === maxLines - 1 ? '...' : ''));
+          rest = rest.slice(limit);
+        }
+      }
+      return lines.length ? lines : [''];
+    }
+    function urnTail(value) {
+      const raw = String(value || '');
+      const decoded = safeDecode(raw);
+      const parts = decoded.split(/[/:]+/).filter(Boolean);
+      return parts.slice(-3).join('/');
+    }
+    function safeDecode(value) {
+      try { return decodeURIComponent(value); } catch { return value; }
     }
     function shortLabel(value, limit = 34) { return String(value).length > limit ? String(value).slice(0, limit - 3) + '...' : String(value); }
     function lineRange(row) { return row.line_start ? `line ${row.line_start}${row.line_end ? '-' + row.line_end : ''}` : ''; }
@@ -1064,10 +1314,54 @@ INDEX_HTML = r"""<!doctype html>
       button.onclick = () => {
         viewMode = button.dataset.mode;
         selectedEdgeId = null;
+        pendingViewport = 'center';
         document.querySelectorAll('[data-mode]').forEach(item => item.classList.toggle('active', item.dataset.mode === viewMode));
         renderGraph(currentGraph);
       };
     });
+    function installCanvasInteraction() {
+      const svg = $('graph');
+      svg.onpointerdown = (event) => {
+        if (event.target.closest?.('.node, .link-hit')) return;
+        dragState = {x: event.clientX, y: event.clientY, tx: canvasTransform.x, ty: canvasTransform.y};
+        svg.classList.add('dragging');
+        svg.setPointerCapture?.(event.pointerId);
+      };
+      svg.onpointermove = (event) => {
+        if (!dragState) return;
+        canvasTransform.x = dragState.tx + event.clientX - dragState.x;
+        canvasTransform.y = dragState.ty + event.clientY - dragState.y;
+        applyCanvasTransform();
+      };
+      svg.onpointerup = (event) => {
+        dragState = null;
+        svg.classList.remove('dragging');
+        svg.releasePointerCapture?.(event.pointerId);
+      };
+      svg.onpointerleave = () => {
+        dragState = null;
+        svg.classList.remove('dragging');
+      };
+      svg.onwheel = (event) => {
+        event.preventDefault();
+        const rect = svg.getBoundingClientRect();
+        zoomCanvasAt(event.clientX - rect.left, event.clientY - rect.top, event.deltaY < 0 ? 1.12 : 0.88);
+      };
+      $('zoomIn').onclick = () => zoomCanvas(1.18);
+      $('zoomOut').onclick = () => zoomCanvas(0.84);
+      $('centerCanvas').onclick = () => {
+        const svgWidth = svg.clientWidth || 900;
+        const svgHeight = svg.clientHeight || 600;
+        centerCanvasOn(canvasWorld.focusX, canvasWorld.focusY, svgWidth, svgHeight);
+        applyCanvasTransform();
+      };
+      $('fitCanvas').onclick = () => {
+        const svgWidth = svg.clientWidth || 900;
+        const svgHeight = svg.clientHeight || 600;
+        fitGraphToViewport(svgWidth, svgHeight);
+        applyCanvasTransform();
+      };
+    }
     function loadInitialFromPath() {
       const prefix = '/lineage/nodes/';
       if (location.pathname.startsWith(prefix)) {
@@ -1076,6 +1370,7 @@ INDEX_HTML = r"""<!doctype html>
         loadLineage(urn);
       }
     }
+    installCanvasInteraction();
     loadStats(); loadCandidates(); loadInitialFromPath();
   </script>
 </body>

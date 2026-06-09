@@ -84,10 +84,12 @@ Validated surfaces:
 - Stats header
 - Search by job/table/URN text
 - Full graph rendering in SVG
-- Directed upstream/downstream data-flow layout
-- Default data-flow view filtering `READS`, `WRITES`, and `DERIVES_FROM`
+- Directed upstream/downstream lineage canvas
+- Default lineage-flow view filtering to directed paths connected to the focus
+- DAG layer layout for `READS`, `WRITES`, `DERIVES_FROM`, and `DEPENDS_ON`
+- Pan, zoom, fit, and center canvas controls
+- Card-based graph nodes with kind/name/URN tail labels
 - Full Graph toggle for infrastructure/context edges
-- Lane-based source/focus/target graph presentation
 - Inbound/outbound relation panels with clickable edge selection
 - Structured selected-node and selected-edge details
 - Arrow rendering for `READS`, `WRITES`, and `DERIVES_FROM`
@@ -112,11 +114,13 @@ Latest lineage-flow UI validation:
 
 ```text
 large root: dws://dws_dev/th_ai/sdi_th/sdi_th_etl_program_log
-large graph default mode: data flow | 147/418 nodes | 146/600 links
-large graph lanes: 3
+large graph default mode: lineage flow | 3 layers | 220/418 nodes | 221/600 links
+large graph layers: up 2 / 73, up 1 / 146, focus / 1
 large graph inbound cards rendered: 40
+canvas controls: zoom, drag, fit, center validated
+center scale after fit: 90%
 small root: dws://ai-edit/dw/public/fact_orders_corrected
-small graph default mode: data flow | 2/2 nodes | 1/1 links
+small graph default mode: lineage flow | 2 layers | 2/2 nodes | 1/1 links
 edge selection: selected edge and selected relation card highlighted
 edge detail: DERIVES_FROM 0.69 / manual_review / mock-lineage / reviewer web
 browser console errors: 0
