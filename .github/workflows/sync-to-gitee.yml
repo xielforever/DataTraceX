@@ -1,0 +1,36 @@
+name: Sync to Gitee
+# GitHub push 后秒级推送到 Gitee（单向：GitHub -> Gitee，不要直接改 Gitee）
+# 触发：任意分支 push、打 tag、手动触发
+on:
+  push:
+    branches: ['**']
+    tags: ['**']
+  workflow_dispatch:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout full history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup SSH for Gitee
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.GITEE_RSA_PRIVATE_KEY }}
+
+      - name: Add Gitee host key
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan gitee.com >> ~/.ssh/known_hosts
+
+      - name: Push all branches and tags to Gitee
+        run: |
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          # 同名仓：GitHub 仓名 = Gitee 仓名，owner 固定为 Forget-Me-Not
+          git remote add gitee "git@gitee.com:Forget-Me-Not/${{ github.event.repository.name }}.git"
+          git push --all --force gitee
+          git push --tags --force gitee
